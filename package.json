@@ -1,0 +1,29 @@
+{
+  "name": "eduflujo-api",
+  "version": "1.0.0",
+  "description": "Backend para manejar toda la logica del proceso de evaluacion continua",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Merienda-Soft/EduFlujo-API.git"
+  },
+  "keywords": [
+    "Notas",
+    "Evaluacion",
+    "continua",
+    "Bolivia",
+    "Profesores"
+  ],
+  "author": "David Valdivia Arancibia y Dorian Estefan Choque Calderon",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Merienda-Soft/EduFlujo-API/issues"
+  },
+  "homepage": "https://github.com/Merienda-Soft/EduFlujo-API#readme",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
