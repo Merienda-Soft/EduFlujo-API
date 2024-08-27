@@ -5,9 +5,12 @@ router.get('/', (req, res) => {
   res.send('mensaje de prueba, la api funciona');
 });
 
-//exmple const professorsRoutes = require('./professorsRoutes')
-//router.use('/professors', professorsRoutes);
+//exportacion de rutas
+const teachersRoutes = require('./routes_teachers');
 
+
+//usar las rutas
+router.use('/teachers', teachersRoutes);
 
 
 module.exports = router

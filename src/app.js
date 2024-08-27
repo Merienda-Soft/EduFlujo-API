@@ -10,6 +10,7 @@ connectDB();
 
 //middlewares
 app.use(cors());
+app.use(express.json());
 
 //rutas
 app.use('/api', routes);
