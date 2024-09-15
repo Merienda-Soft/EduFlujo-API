@@ -7,5 +7,4 @@ router.get('/:id', teacherController.getTeacherById);
 router.post('/', teacherController.createTeacher);
 router.put('/:id', teacherController.updateTeacher);
 
-
 module.exports = router;
