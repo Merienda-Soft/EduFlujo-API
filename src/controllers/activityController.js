@@ -1,4 +1,5 @@
-const Actividad = require("../models/activity");  // Asegúrate de importar correctamente el modelo de Actividad
+const Actividad = require("../models/activity");
+const Inscripcion = require('../models/registration'); 
 const { validationResult } = require("express-validator");
 
 // Obtener todas las actividades
@@ -28,7 +29,27 @@ const getActividadById = async (req, res) => {
         }
         res.status(200).json(actividad);
     } catch (error) {
-        res.status(500).json({ error: "Error al obtener la actividad" });
+        res.status(500).json({ error: `Error al obtener la actividad -> ${error} ` });
+    }
+};
+
+//by materiaId, CursoId, teacherId
+const getFilteredActivities = async (req, res) => {
+    const { materiaid, cursoid, teacherid } = req.query;  
+    try {
+        const actividades = await Actividad.find({
+            materiaid: materiaid,
+            cursoid: cursoid,
+            professorid: teacherid  // Asegúrate de usar el campo correcto, aquí es 'professorid'
+        })
+
+        if (actividades.length === 0) {
+            return res.status(404).json({ error: "No se encontraron actividades con esos filtros" });
+        }
+
+        res.status(200).json(actividades);
+    } catch (error) {
+        res.status(500).json({ error: "Error al obtener las actividades" });
     }
 };
 
@@ -39,9 +60,19 @@ const createActividad = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, description, fecha, horario, ponderacion, cursoid, materiaid, professorid, tipo, estudiantes, fecha_fin } = req.body;
+    const { name, description, fecha, horario, ponderacion, cursoid, materiaid, professorid, tipo, fecha_fin } = req.body;
 
     try {
+        const inscripciones = await Inscripcion.find({
+            'cursos.courseid': cursoid,  
+            'cursos.materias': materiaid  
+        });
+
+        const estudiantesArray = inscripciones.map(inscripcion => ({
+            estudianteId: inscripcion._id,  
+            calificacion: 0  
+        }));
+
         const newActividad = new Actividad({
             name,
             description,
@@ -52,14 +83,15 @@ const createActividad = async (req, res) => {
             materiaid,
             professorid,
             tipo,
-            estudiantes,  // Array de estudiantes con sus calificaciones
+            estudiantes: estudiantesArray,
             fecha_fin
         });
 
-        const actividadSave = await newActividad.save();  // Guardar la nueva actividad en la base de datos
+        const actividadSave = await newActividad.save(); 
         res.status(201).json(actividadSave);
+
     } catch (error) {
-        res.status(500).json({ error: "Error al crear la actividad" });
+        res.status(500).json({ error: "Error al crear la actividad" + error });
     }
 };
 
@@ -119,4 +151,5 @@ module.exports = {
     createActividad,
     updateActividad,
     deleteActividad,
+    getFilteredActivities
 };

@@ -4,7 +4,13 @@ const { validationResult } = require("express-validator");
 // Obtener todos los profesores
 const getProfesores = async (req, res) => {
     try {
-        const profesores = await Profesor.find().populate("cursos", "name");  // Obtén todos los profesores
+        const profesores = await Profesor.find().populate({
+          path: 'cursos', 
+          populate: {
+            path: 'materias',  
+            select: 'name'  
+          }
+        });  // Obtén todos los profesores
         res.status(200).json(profesores);
     } catch (error) {
         res.status(500).json({ error: "Error al obtener los profesores" });
@@ -14,7 +20,13 @@ const getProfesores = async (req, res) => {
 // Obtener un profesor por ID
 const getProfesorById = async (req, res) => {
     try {
-        const profesor = await Profesor.findById(req.params.id);  // Busca un profesor por su ID
+        const profesor = await Profesor.findById(req.params.id).populate({
+          path: 'cursos', 
+          populate: {
+            path: 'materias',  
+            select: 'name'  
+          }
+        });  // Busca un profesor por su ID
         if (!profesor) {
             return res.status(404).json({ error: "Profesor no encontrado" });
         }
