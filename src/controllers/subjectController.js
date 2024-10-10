@@ -1,74 +1,94 @@
-const subject = require('../models/subject');
-const Subject = require('../models/subject');
-const { validationResult } = require('express-validator');
+const Materia = require("../models/subject");  // Asegúrate de importar correctamente el modelo de Materia
+const { validationResult } = require("express-validator");
 
-const getSubject = async (req, res) => {
-    try{
-        const subjects = await Subject.find();
-        res.status(200).json(subjects);
-    }catch(error){
-        res.status(500).json({ error: 'Error al obtener las Materias'});_
-    }
-}
-
-const getSubjectById = async (req, res) => {
-    try{
-        const subject = await Subject.findById(req.params.id);
-        if(!subject){
-            return res.status(404).json({error: 'Materia no encontrada'})
-        }
-        res.status(200).json(subject);
-    }catch (error){
-        res.status(500).json({ error: 'Error al obtener la Materia'});
+// Obtener todas las materias
+const getMaterias = async (req, res) => {
+    try {
+        const materias = await Materia.find();  // Obtén todas las materias
+        res.status(200).json(materias);
+    } catch (error) {
+        res.status(500).json({ error: "Error al obtener las materias" });
     }
 };
 
-const createSubject = async (req, res) => {
-    const error = validationResult(req);
-    if(!error.isEmpty){
-        return res.status(400).json({errors: error.array()});
+// Obtener una materia por ID
+const getMateriaById = async (req, res) => {
+    try {
+        const materia = await Materia.findById(req.params.id);  // Busca una materia por su ID
+        if (!materia) {
+            return res.status(404).json({ error: "Materia no encontrada" });
+        }
+        res.status(200).json(materia);
+    } catch (error) {
+        res.status(500).json({ error: "Error al obtener la materia" });
     }
-    const {subject_name} = req.body;
+};
+
+// Crear una nueva materia
+const createMateria = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name } = req.body;
 
     try {
-        const newSubject = new Subject({
-            subject_name
-        })
-        //Inicializacion de fechas
-        newSubject.create_at = Date.now();
-        newSubject.update_at = Date.now();
-        const subjectSave = await newSubject.save();
-        res.status(201).json(subjectSave);
-    }catch(error){
-        res.status(500).json({error: 'Error al crear la Materia'});   
+        const newMateria = new Materia({
+            name
+        });
+
+        const materiaSave = await newMateria.save();  // Guardar la nueva materia en la base de datos
+        res.status(201).json(materiaSave);
+    } catch (error) {
+        res.status(500).json({ error: "Error al crear la materia" });
     }
-}
+};
 
-const updateSubject = async (req, res) => {
-    const errors = validation(req);
-    if(!errors.isEmpty){
-        return res.status(400).json({errors: errors.array()});
+// Actualizar una materia
+const updateMateria = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
     }
 
-    const {subject_name} = req.body;
+    const { name } = req.body;
 
-    try{
-        let subject = await Subject.findById(req.params.id);
+    try {
+        let materia = await Materia.findById(req.params.id);
+        if (!materia) {
+            return res.status(404).json({ error: "Materia no encontrada" });
+        }
 
-        subject.subject_name = subject_name || subject.subject_name;
-        subject.update_at = Date.now();
-        subject.update_at = Date.now();
+        // Actualizar los datos de la materia
+        materia.name = name || materia.name;
 
-        const subjectUpdate = await subject.save();
-        res.status(200).json(subjectUpdate);
-    }catch(error){
-        res.status(500).json({error: 'Error al actualizar la Materia'});
+        const materiaUpdate = await materia.save();  // Guardar los cambios
+        res.status(200).json(materiaUpdate);
+    } catch (error) {
+        res.status(500).json({ error: "Error al actualizar la materia" });
     }
-}
+};
+
+// Eliminar una materia
+const deleteMateria = async (req, res) => {
+    try {
+        const materia = await Materia.findById(req.params.id);
+        if (!materia) {
+            return res.status(404).json({ error: "Materia no encontrada" });
+        }
+
+        await materia.remove();  // Eliminar la materia
+        res.status(200).json({ message: "Materia eliminada con éxito" });
+    } catch (error) {
+        res.status(500).json({ error: "Error al eliminar la materia" });
+    }
+};
 
 module.exports = {
-    getSubject,
-    getSubjectById,
-    createSubject,
-    updateSubject
-}
+    getMaterias,
+    getMateriaById,
+    createMateria,
+    updateMateria,
+    deleteMateria,
+};

@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const subjectController = require('../controllers/subjectController');
 
-router.get('/', subjectController.getSubject);
-router.get('/:id', subjectController.getSubjectById);
-router.post('/', subjectController.createSubject);
-router.put('/:id', subjectController.updateSubject);
+// Rutas CRUD para Materias
+router.get('/', subjectController.getMaterias);
+router.get('/:id', subjectController.getMateriaById);
+router.post('/', subjectController.createMateria);
+router.put('/:id', subjectController.updateMateria);
+router.delete('/:id', subjectController.deleteMateria);
 
 module.exports = router;

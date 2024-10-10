@@ -1,0 +1,61 @@
+// cmaterias
+localhost:3000/api/subjects
+{
+  "name": "Matematicas"
+}
+
+
+//cursos
+localhost:3000/api/courses
+{
+  "name": "Sexto B",
+  "materias": ["670726368106896d3997a6ef", "6707267b8106896d3997a6f1"],
+  "fecha": "2024-01-15"
+}
+
+//tutors
+localhost:3000/api/tutors
+{
+  "name": "Ana",
+  "apellido": "López",
+  "telefono": "98765432"
+}
+
+//profesores
+{
+  "name": "Juan Pérez",
+  "datebirth": "1978-02-12",
+  "cursos": ["64b2c578d4c4a010abf321d3"]
+}
+
+
+//inscripciones (estudiantes)
+localhost:3000/api/registration
+{
+  "name": "Pedro Gutiérrez",
+  "datebirth": "2011-05-12",
+  "cursos": ["670727448106896d3997a6f6"]
+}
+
+
+//actividades
+localhost:3000/api/activities
+{
+  "name": "Examen Parcial",
+  "description": "Tarea de Matesa",
+  "fecha": "2024-03-10",
+  "horario": "10:00",
+  "ponderacion": "25%",
+  "cursoid": "670727448106896d3997a6f6",
+  "materiaid": "6707267b8106896d3997a6f1",
+  "professorid": "67072a068d0df54d855f43ad",
+  "tipo": 2,
+  "estudiantes": [
+    {
+      "estudianteId": "67072d74e1c828fbdf42b1ab",
+      "calificacion": 0
+    }
+  ],
+  "fecha_fin": "2024-03-20"
+}
+

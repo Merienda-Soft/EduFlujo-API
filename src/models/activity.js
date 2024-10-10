@@ -1,39 +1,64 @@
 const mongoose = require("mongoose");
 
 const ActivitySchema = new mongoose.Schema({
-  activity_name: {
+  name: {
     type: String,
-    required: [true, "El nombre de la actividad es obligatorio"],
+    required: [true, "El nombre del examen es obligatorio"],
     trim: true,
   },
-  month: {
-    type: Number,
-    required: false,
-    default: 0,
+  description: {
+    type: String,
+    required: [true, "La descripción es obligatoria"],
   },
-  quarter: {
-    type: Number,
-    required: false,
-    default: 0,
+  fecha: {
+    type: Date,
+    required: [true, "La fecha es obligatoria"],
   },
-  score: {
-    type: Number,
-    required: false,
-    default: 0,
+  horario: {
+    type: String,
+    required: [true, "El horario es obligatorio"],
   },
-  class_id: {
+  ponderacion: {
+    type: String,
+    required: [true, "La ponderación es obligatoria"],
+  },
+  cursoid: {
     type: mongoose.Schema.Types.ObjectId,
+    ref: "cursos",
     required: true,
-    ref: "Class",
   },
-  create_at: {
-    type: Date,
-    default: Date.now(),
+  materiaid: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "materias",
+    required: true,
   },
-  update_at: {
+  professorid: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "profesors",
+    required: true,
+  },
+  tipo: {
+    type: Number,
+    required: true,
+  },
+  estudiantes: [
+    {
+      estudianteId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "inscripciones",
+      },
+      calificacion: {
+        type: Number,
+        // min: 0,  // Validación mínima
+        // max: 100,  // Validación máxima
+      },
+      _id: false
+    },
+  ],
+  fecha_fin: {
     type: Date,
-    required: false,
+    required: true,
   },
 });
 
-module.exports = mongoose.model("Activity", ActivitySchema);
+module.exports = mongoose.model("actividads", ActivitySchema);
