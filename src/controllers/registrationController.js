@@ -1,5 +1,39 @@
 const Inscripcion = require("../models/registration");  // Asegúrate de importar correctamente el modelo de Inscripcion
 const { validationResult } = require("express-validator");
+const mongoose = require('mongoose');
+
+const getStudentsByCourseAndSubject = async (req, res) => {
+    try {
+        const { courseid, materiaid } = req.query;
+
+    // Validar si los IDs son válidos ObjectId de MongoDB
+    if (!mongoose.Types.ObjectId.isValid(courseid) || !mongoose.Types.ObjectId.isValid(materiaid)) {
+      return res.status(400).json({ error: 'courseid o materiaid no son ObjectId válidos' });
+    }
+
+    const courseObjectId = new mongoose.Types.ObjectId(courseid);
+    const materiaObjectId = new mongoose.Types.ObjectId(materiaid);
+
+      const students = await Inscripcion.find({
+        cursos: {
+          $elemMatch: {  // Busca dentro del array de cursos
+            courseid: courseObjectId,  // Coincide con el courseid como ObjectId
+            materiaid: { $in: [materiaObjectId] }  // Verifica que el materiaid esté en el array de materias
+          }
+        }
+      });
+      
+      
+  
+      if (students.length === 0) {
+        return res.status(404).json({ message: 'No se encontraron estudiantes para este curso ' });
+      }
+  
+      res.status(200).json(students);
+    } catch (error) {
+      res.status(500).json({ error: `Error al obtener los estudiantes: ${error.message}` });
+    }
+  };
 
 // Obtener todas las inscripciones
 const getInscripciones = async (req, res) => {
@@ -101,4 +135,5 @@ module.exports = {
     createInscripcion,
     updateInscripcion,
     deleteInscripcion,
+    getStudentsByCourseAndSubject
 };

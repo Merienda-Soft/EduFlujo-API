@@ -36,6 +36,24 @@ const getProfesorById = async (req, res) => {
     }
 };
 
+const getProfesorByEmail = async (req, res) => {
+    try {
+        const profesor = await Profesor.findOne({email: req.params.email}).populate({
+          path: 'cursos', 
+          populate: {
+            path: 'materias',  
+            select: 'name'  
+          }
+        });  // Busca un profesor por su ID
+        if (!profesor) {
+            return res.status(404).json({ error: "Profesor no encontrado" });
+        }
+        res.status(200).json(profesor);
+    } catch (error) {
+        res.status(500).json({ error: "Error al obtener el profesor por email" });
+    }
+};
+
 // Crear un nuevo profesor
 const createProfesor = async (req, res) => {
     const errors = validationResult(req);
@@ -104,6 +122,7 @@ const deleteProfesor = async (req, res) => {
 module.exports = {
     getProfesores,
     getProfesorById,
+    getProfesorByEmail,
     createProfesor,
     updateProfesor,
     deleteProfesor,

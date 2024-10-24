@@ -42,6 +42,10 @@ const getFilteredActivities = async (req, res) => {
             cursoid: cursoid,
             professorid: teacherid  // Asegúrate de usar el campo correcto, aquí es 'professorid'
         })
+        .populate("cursoid", "name")
+        .populate("materiaid", "name")
+        .populate("professorid", "name")
+        .populate("estudiantes.estudianteId", "name");
 
         if (actividades.length === 0) {
             return res.status(404).json({ error: "No se encontraron actividades con esos filtros" });

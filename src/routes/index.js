@@ -14,6 +14,8 @@ const tutorRoutes = require('./routes_tutor');
 const profesorRoutes = require('./routes_teacher');
 const inscripcionRoutes = require('./routes_registration');
 const userRoutes = require('./routes_user');
+const authRoutes = require('./routes_auth');
+const attendanceRoutes = require('./routes_attendance') 
 
 // Usar las rutas con prefijos
 router.use('/activities', activityRoutes);
@@ -23,5 +25,7 @@ router.use('/tutors', tutorRoutes);
 router.use('/teachers', profesorRoutes);
 router.use('/registration', inscripcionRoutes);
 router.use('/users', userRoutes);
+router.use('/auth', authRoutes);
+router.use('/attendances', attendanceRoutes);
 
 module.exports = router;

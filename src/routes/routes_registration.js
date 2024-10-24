@@ -3,6 +3,7 @@ const router = express.Router();
 const inscripcionController = require('../controllers/registrationController');
 
 // Rutas CRUD para Inscripciones
+router.get('/inscripciones', inscripcionController.getStudentsByCourseAndSubject);
 router.get('/', inscripcionController.getInscripciones);
 router.get('/:id', inscripcionController.getInscripcionById);
 router.post('/', inscripcionController.createInscripcion);
