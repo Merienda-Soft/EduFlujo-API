@@ -1,6 +1,7 @@
 const Actividad = require("../models/activity");
 const Inscripcion = require('../models/registration'); 
 const { validationResult } = require("express-validator");
+const mongoose = require('mongoose');
 
 // Obtener todas las actividades
 const getActividades = async (req, res) => {
@@ -25,11 +26,11 @@ const getActividadById = async (req, res) => {
             .populate("professorid", "name")
             .populate("estudiantes.estudianteId", "name");  // Carga el nombre de los estudiantes asociados
         if (!actividad) {
-            return res.status(404).json({ error: "Actividad no encontrada" });
+            return res.status(404).json({ "ok": false, error: "Actividad no encontrada" });
         }
-        res.status(200).json(actividad);
+        res.status(200).json({"ok": true, "actividad": actividad});
     } catch (error) {
-        res.status(500).json({ error: `Error al obtener la actividad -> ${error} ` });
+        res.status(500).json({"ok": false, error: `Error al obtener la actividad -> ${error} ` });
     }
 };
 
@@ -66,11 +67,19 @@ const createActividad = async (req, res) => {
 
     const { name, description, fecha, horario, ponderacion, cursoid, materiaid, professorid, tipo, fecha_fin } = req.body;
 
+
     try {
-        const inscripciones = await Inscripcion.find({
-            'cursos.courseid': cursoid,  
-            'cursos.materias': materiaid  
-        });
+        const courseObjectId = new mongoose.Types.ObjectId(cursoid);
+        const materiaObjectId = new mongoose.Types.ObjectId(materiaid);
+
+      const inscripciones = await Inscripcion.find({
+        cursos: {
+          $elemMatch: {  // Busca dentro del array de cursos
+            courseid: courseObjectId,  // Coincide con el courseid como ObjectId
+            materiaid: { $in: [materiaObjectId] }  // Verifica que el materiaid esté en el array de materias
+          }
+        }
+      });
 
         const estudiantesArray = inscripciones.map(inscripcion => ({
             estudianteId: inscripcion._id,  
@@ -137,13 +146,12 @@ const updateActividad = async (req, res) => {
 // Eliminar una actividad
 const deleteActividad = async (req, res) => {
     try {
-        const actividad = await Actividad.findById(req.params.id);
+        const actividad = await Actividad.findByIdAndDelete(req.params.id);
         if (!actividad) {
-            return res.status(404).json({ error: "Actividad no encontrada" });
+            return res.status(404).json({ "ok": false });
         }
 
-        await actividad.remove();  // Eliminar la actividad
-        res.status(200).json({ message: "Actividad eliminada con éxito" });
+        res.status(200).json({ "ok": true });
     } catch (error) {
         res.status(500).json({ error: "Error al eliminar la actividad" });
     }
