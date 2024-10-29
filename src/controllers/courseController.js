@@ -4,8 +4,9 @@ const { validationResult } = require("express-validator");
 // Obtener todos los cursos
 const getCursos = async (req, res) => {
     try {
-        const cursos = await Curso.find().populate("materias", "name");  // Obtén todos los cursos y carga los nombres de las materias
+        const cursos = await Curso.find().populate("materias", "name deleted status");  // Obtén todos los cursos y carga los nombres de las materias
         res.status(200).json(cursos);
+        console.log(cursos)
     } catch (error) {
         res.status(500).json({ error: "Error al obtener los cursos" });
     }
@@ -80,10 +81,14 @@ const deleteCurso = async (req, res) => {
             return res.status(404).json({ error: "Curso no encontrado" });
         }
 
-        await curso.remove();  // Eliminar el curso
-        res.status(200).json({ message: "Curso eliminado con éxito" });
+        curso.deleted = 1;
+
+        await curso.save();  
+
+        res.status(200).json({ message: "Curso eliminado de manera lógica con éxito" });
     } catch (error) {
-        res.status(500).json({ error: "Error al eliminar el curso" });
+        console.error('Error al eliminar el curso de manera lógica:', error);
+        res.status(500).json({ error: "Error al eliminar el curso de manera lógica" });
     }
 };
 

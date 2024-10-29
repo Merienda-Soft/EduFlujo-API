@@ -5,6 +5,7 @@ const { validationResult } = require("express-validator");
 const getMaterias = async (req, res) => {
     try {
         const materias = await Materia.find();  // Obtén todas las materias
+        console.log(materias)
         res.status(200).json(materias);
     } catch (error) {
         res.status(500).json({ error: "Error al obtener las materias" });
@@ -85,10 +86,29 @@ const deleteMateria = async (req, res) => {
     }
 };
 
+const stateMateria = async (req, res) => {
+    const { id, deleted } = req.body;
+
+    try {
+        const materia = await Materia.findById(id);
+        if (!materia) {
+            return res.status(404).json({ error: "Materia no encontrada" });
+        }
+
+        materia.deleted = deleted;
+        await materia.save();
+
+        res.status(200).json({ message: `Materia ${deleted === 1 ? 'inactivada' : 'activada'} con éxito` });
+    } catch (error) {
+        res.status(500).json({ error: "Error al actualizar el estado de la materia" });
+    }
+};
+
 module.exports = {
     getMaterias,
     getMateriaById,
     createMateria,
     updateMateria,
     deleteMateria,
+    stateMateria,
 };
