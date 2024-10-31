@@ -34,6 +34,9 @@ const getProfesorByEmail = async (req, res) => {
         }
 
         const asignaciones = await Asignacion.find({ professor: profesor.id })
+        .populate('curso', 'name') // Esto obtiene el nombre del curso
+        .populate('materias', 'name'); // Esto obtiene el nombre de cada materia
+
         const profesorConAsignaciones = {
             ...profesor.toObject(), 
             asignaciones: asignaciones
