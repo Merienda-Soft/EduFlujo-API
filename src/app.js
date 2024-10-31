@@ -7,7 +7,6 @@ const app = express();
 
 //coneccion a la base de datos
 connectDB();
-
 //middlewares
 app.use(cors());
 app.use(express.json());

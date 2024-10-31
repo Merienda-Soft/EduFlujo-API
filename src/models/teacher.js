@@ -6,16 +6,10 @@ const TeacherSchema = new Schema({
     type: String,
     required: true
   },
-  datebirth: {
-    type: Date,
+  email: {
+    type: String,
     required: true
   },
-  cursos: [
-    {
-      type: mongoose.Schema.Types.ObjectId,  
-      ref: 'cursos' 
-    }
-  ]
 });
 
 module.exports = mongoose.model('profesors', TeacherSchema);
