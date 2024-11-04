@@ -17,6 +17,7 @@ const userRoutes = require('./routes_user');
 const authRoutes = require('./routes_auth');
 const attendanceRoutes = require('./routes_attendance');
 const asignacionRoutes = require('./routes_asignacion');
+const pdfRoutes = require('./routes_pdf')
 
 // Usar las rutas con prefijos
 router.use('/activities', activityRoutes);
@@ -29,5 +30,6 @@ router.use('/users', userRoutes);
 router.use('/auth', authRoutes);
 router.use('/attendances', attendanceRoutes);
 router.use('/asignaciones', asignacionRoutes);
+router.use('/pdf', pdfRoutes);
 
 module.exports = router;

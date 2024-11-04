@@ -56,9 +56,6 @@ const createProfesor = async (req, res) => {
     const { name, email } = req.body;
 
     try {
-        // Imprimir la data que se está recibiendo
-        console.log('Datos recibidos:', cursos);
-
         const newProfesor = new Profesor({
             name,
             email
@@ -67,14 +64,11 @@ const createProfesor = async (req, res) => {
         const profesorSave = await newProfesor.save();
         res.status(201).json(profesorSave);
     } catch (error) {
-        // Manejar errores con más detalle
         console.error('Error al crear el profesor:', error);
         res.status(500).json({ error: `Error al crear el profesor: ${error.message}` });
     }
 };
 
-
-// Actualizar un profesor
 const updateProfesor = async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
