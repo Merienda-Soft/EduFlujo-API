@@ -52,4 +52,4 @@ const RegistrationSchema = new Schema({
   }
 }, { collection: 'inscripciones' });
 
-module.exports = mongoose.model('Inscripcion', RegistrationSchema);
+module.exports = mongoose.model('inscripciones', RegistrationSchema);
