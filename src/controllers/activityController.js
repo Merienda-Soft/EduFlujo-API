@@ -120,7 +120,7 @@ const updateActividad = async (req, res) => {
     try {
         let actividad = await Actividad.findById(req.params.id);
         if (!actividad) {
-            return res.status(404).json({ error: "Actividad no encontrada" });
+            return res.status(404).json({ok: false, error: "Actividad no encontrada" });
         }
 
         // Actualizar los datos de la actividad
@@ -137,9 +137,9 @@ const updateActividad = async (req, res) => {
         actividad.fecha_fin = fecha_fin || actividad.fecha_fin;
 
         const actividadUpdate = await actividad.save();  // Guardar los cambios
-        res.status(200).json(actividadUpdate);
+        res.status(200).json({ok: true, status:1});
     } catch (error) {
-        res.status(500).json({ error: "Error al actualizar la actividad" });
+        res.status(500).json({ok: false, error: "Error al actualizar la actividad" });
     }
 };
 
