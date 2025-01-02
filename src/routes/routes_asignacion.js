@@ -8,5 +8,6 @@ router.get('/:id', asignacionController.getAsignacionById);
 router.post('/', asignacionController.createAsignacion); 
 router.put('/:id', asignacionController.updateAsignacion); 
 router.delete('/:id', asignacionController.deleteAsignacion); 
+router.get('/curso/:cursoId', asignacionController.getAsignacionesByCurso);
 
 module.exports = router;

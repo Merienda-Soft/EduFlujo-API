@@ -24,6 +24,20 @@ const getAsignacionById = async (req, res) => {
   }
 };
 
+
+// Obtener todas las asignaciones por curso id
+const getAsignacionesByCurso = async (req, res) => {
+  try {
+    const asignaciones = await Asignacion.find({ curso: req.params.cursoId }).populate('curso').populate('professor').populate('materias');
+    if (!asignaciones || asignaciones.length === 0) {
+      return res.status(200).json([]);
+    }
+    res.status(200).json(asignaciones);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener las asignaciones para el curso' });
+  }
+};
+
 // Crear una nueva asignación
 const createAsignacion = async (req, res) => {
   const errors = validationResult(req);
@@ -94,4 +108,5 @@ module.exports = {
   createAsignacion,
   updateAsignacion,
   deleteAsignacion,
+  getAsignacionesByCurso
 };

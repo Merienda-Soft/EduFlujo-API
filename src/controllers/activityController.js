@@ -37,11 +37,12 @@ const getActividadById = async (req, res) => {
 //by materiaId, CursoId, teacherId
 const getFilteredActivities = async (req, res) => {
     const { materiaid, cursoid, teacherid } = req.query;  
+    
     try {
         const actividades = await Actividad.find({
-            materiaid: materiaid,
-            cursoid: cursoid,
-            professorid: teacherid  // Asegúrate de usar el campo correcto, aquí es 'professorid'
+            materiaid: new mongoose.Types.ObjectId(materiaid),
+            cursoid: new mongoose.Types.ObjectId(cursoid),
+            professorid: new mongoose.Types.ObjectId(teacherid)  // Asegúrate de usar el campo correcto, aquí es 'professorid'
         })
         .populate("cursoid", "name")
         .populate("materiaid", "name")
@@ -54,7 +55,7 @@ const getFilteredActivities = async (req, res) => {
 
         res.status(200).json(actividades);
     } catch (error) {
-        res.status(500).json({ error: "Error al obtener las actividades" });
+        res.status(500).json({ error: "Error al obtener las actividades", err: error.message });
     }
 };
 
@@ -75,8 +76,7 @@ const createActividad = async (req, res) => {
       const inscripciones = await Inscripcion.find({
         cursos: {
           $elemMatch: {  // Busca dentro del array de cursos
-            courseid: courseObjectId,  // Coincide con el courseid como ObjectId
-            materiaid: { $in: [materiaObjectId] }  // Verifica que el materiaid esté en el array de materias
+            $in: courseObjectId
           }
         }
       });
@@ -120,7 +120,7 @@ const updateActividad = async (req, res) => {
     try {
         let actividad = await Actividad.findById(req.params.id);
         if (!actividad) {
-            return res.status(404).json({ error: "Actividad no encontrada" });
+            return res.status(404).json({ok: false, error: "Actividad no encontrada" });
         }
 
         // Actualizar los datos de la actividad
@@ -137,9 +137,9 @@ const updateActividad = async (req, res) => {
         actividad.fecha_fin = fecha_fin || actividad.fecha_fin;
 
         const actividadUpdate = await actividad.save();  // Guardar los cambios
-        res.status(200).json(actividadUpdate);
+        res.status(200).json({ok: true, status:1});
     } catch (error) {
-        res.status(500).json({ error: "Error al actualizar la actividad" });
+        res.status(500).json({ok: false, error: "Error al actualizar la actividad" });
     }
 };
 
