@@ -18,6 +18,7 @@ const authRoutes = require('./routes_auth');
 const attendanceRoutes = require('./routes_attendance') 
 const reportRoutes = require('./routes_report');
 const pdfRoutes = require('./routes_pdf')
+const asignacionRoutes = require('./routes_asignacion')
 
 // Usar las rutas con prefijos
 router.use('/activities', activityRoutes);
