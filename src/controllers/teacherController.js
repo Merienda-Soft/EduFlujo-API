@@ -1,16 +1,11 @@
-const Profesor = require("../models/teahcer");  // Asegúrate de importar correctamente el modelo de Profesor
+const Profesor = require("../models/teacher");  // Asegúrate de importar correctamente el modelo de Profesor
+const Asignacion = require('../models/asignacion');
 const { validationResult } = require("express-validator");
 
 // Obtener todos los profesores
 const getProfesores = async (req, res) => {
     try {
-        const profesores = await Profesor.find().populate({
-          path: 'cursos', 
-          populate: {
-            path: 'materias',  
-            select: 'name'  
-          }
-        });  // Obtén todos los profesores
+        const profesores = await Profesor.find().populate('name email');
         res.status(200).json(profesores);
     } catch (error) {
         res.status(500).json({ error: "Error al obtener los profesores" });
@@ -20,13 +15,7 @@ const getProfesores = async (req, res) => {
 // Obtener un profesor por ID
 const getProfesorById = async (req, res) => {
     try {
-        const profesor = await Profesor.findById(req.params.id).populate({
-          path: 'cursos', 
-          populate: {
-            path: 'materias',  
-            select: 'name'  
-          }
-        });  // Busca un profesor por su ID
+        const profesor = await Profesor.findById(req.params.id).populate('name email');
         if (!profesor) {
             return res.status(404).json({ error: "Profesor no encontrado" });
         }
@@ -38,19 +27,22 @@ const getProfesorById = async (req, res) => {
 
 const getProfesorByEmail = async (req, res) => {
     try {
-        const profesor = await Profesor.findOne({email: req.params.email}).populate({
-          path: 'cursos', 
-          populate: {
-            path: 'materias',  
-            select: 'name'  
-          }
-        });  // Busca un profesor por su ID
+        const profesor = await Profesor.findOne({email: req.params.email})
+        
         if (!profesor) {
             return res.status(404).json({ error: "Profesor no encontrado" });
         }
-        res.status(200).json(profesor);
+
+        const asignaciones = await Asignacion.find({ professor: profesor.id })
+        const profesorConAsignaciones = {
+            ...profesor.toObject(), 
+            asignaciones: asignaciones
+        };
+        
+        res.status(200).json(profesorConAsignaciones);
     } catch (error) {
-        res.status(500).json({ error: "Error al obtener el profesor por email" });
+        console.error(error); 
+        res.status(500).json({ error: "Error al obtener el profesor por email", details: error.message });
     }
 };
 
@@ -61,21 +53,26 @@ const createProfesor = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, datebirth, cursos } = req.body;
+    const { name, email } = req.body;
 
     try {
+        // Imprimir la data que se está recibiendo
+        console.log('Datos recibidos:', cursos);
+
         const newProfesor = new Profesor({
             name,
-            datebirth,
-            cursos
+            email
         });
 
-        const profesorSave = await newProfesor.save();  // Guardar el nuevo profesor en la base de datos
+        const profesorSave = await newProfesor.save();
         res.status(201).json(profesorSave);
     } catch (error) {
-        res.status(500).json({ error: "Error al crear el profesor" });
+        // Manejar errores con más detalle
+        console.error('Error al crear el profesor:', error);
+        res.status(500).json({ error: `Error al crear el profesor: ${error.message}` });
     }
 };
+
 
 // Actualizar un profesor
 const updateProfesor = async (req, res) => {
@@ -84,7 +81,7 @@ const updateProfesor = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, datebirth, cursos } = req.body;
+    const { name, email } = req.body;
 
     try {
         let profesor = await Profesor.findById(req.params.id);
@@ -94,8 +91,7 @@ const updateProfesor = async (req, res) => {
 
         // Actualizar los datos del profesor
         profesor.name = name || profesor.name;
-        profesor.datebirth = datebirth || profesor.datebirth;
-        profesor.cursos = cursos || profesor.cursos;
+        profesor.email = email || profesor.email;
 
         const profesorUpdate = await profesor.save();  // Guardar los cambios
         res.status(200).json(profesorUpdate);
