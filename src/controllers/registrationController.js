@@ -15,12 +15,7 @@ const getStudentsByCourseAndSubject = async (req, res) => {
         const materiaObjectId = new mongoose.Types.ObjectId(materiaid);
 
         const students = await Inscripcion.find({
-            cursos: {
-                $elemMatch: {  
-                    courseid: courseObjectId,  
-                    materiaid: { $in: [materiaObjectId] }  
-                }
-            }
+            curso: courseObjectId
         });
 
         if (students.length === 0) {
