@@ -74,11 +74,7 @@ const createActividad = async (req, res) => {
         const materiaObjectId = new mongoose.Types.ObjectId(materiaid);
 
       const inscripciones = await Inscripcion.find({
-        cursos: {
-          $elemMatch: {  // Busca dentro del array de cursos
-            $in: courseObjectId
-          }
-        }
+        curso: courseObjectId
       });
 
         const estudiantesArray = inscripciones.map(inscripcion => ({
