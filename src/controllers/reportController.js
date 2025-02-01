@@ -6,6 +6,7 @@ const Actividad = require("../models/activity");
 const Registration = require("../models/registration");
 const Materia = require("../models/subject");
 const Inscripcion = require("../models/registration");
+const stream = require('stream');
 
 // Ruta de la plantilla
 const templatePath = path.join(
@@ -115,38 +116,36 @@ const generateExcelReport = async (req, res) => {
   try {
     const { professorId, cursoId } = req.query;
     const year = Date.year();
-    const baseExcelPath = path.join(
-      __dirname,
-      "..",
-      "temp",
-      `curso_${cursoId}_${year}.xlsx`
-    );
 
-    // Check if base excel exists
-    let workbook;
-    if (!fs.existsSync(baseExcelPath)) {
-      console.log("Creating new base excel with student data...");
-      workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.readFile(templatePath);
+    // Create ZIP stream
+    const zipStream = new stream.PassThrough();
+    const archive = archiver('zip', { 
+        zlib: { level: 9 } 
+    });
 
-      const filiacionSheet = workbook.getWorksheet("FILIACIÓN");
-      if (!filiacionSheet) {
+    // Pipe ZIP to response
+    archive.pipe(zipStream);
+
+    // Create base workbook in memory
+    const baseWorkbook = new ExcelJS.Workbook();
+    await baseWorkbook.xlsx.readFile(templatePath);
+
+    const filiacionSheet = baseWorkbook.getWorksheet("FILIACIÓN");
+    if (!filiacionSheet) {
         throw new Error("Sheet FILIACIÓN not found in template");
-      }
+    }
 
-      const studentsResult = await getStudentsByCourse(cursoId);
-
-      // Sort students by apellido
-      const students = studentsResult.data.sort((a, b) => {
+    // Process students
+    const studentsResult = await getStudentsByCourse(cursoId);
+    const students = studentsResult.data.sort((a, b) => {
         const nameA = a.name.split("\n").join(" ").toUpperCase();
         const nameB = b.name.split("\n").join(" ").toUpperCase();
         return nameA.localeCompare(nameB);
-      });
+    });
 
-      // Write student data starting from row 8
-      let row = 8;
-      // Read student names once per sheet
-      students.forEach((student) => {
+    // Write student data
+    let row = 8;
+    students.forEach(student => {
         // Split full name into parts
         const fullName = student.name.split("\n").join(" ").trim();
         const nameParts = fullName.split(" ");
@@ -182,13 +181,12 @@ const generateExcelReport = async (req, res) => {
         filiacionSheet.getCell(`K${row}`).value = student.gender;
 
         row++;
-      });
+    });
 
-      // Save base excel
-      await workbook.xlsx.writeFile(baseExcelPath);
-    }
+    // Save base workbook to buffer
+    const baseBuffer = await baseWorkbook.xlsx.writeBuffer();
 
-    // Continue with existing code for grade processing...
+    // Get grades data
     const result = await getTasksFrom(professorId, cursoId);
     // Define trimesters
     const TRIMESTER_MONTHS = {
@@ -242,20 +240,12 @@ const generateExcelReport = async (req, res) => {
       return acc;
     }, {});
 
-    // Generate report for each trimester
+    // Process each trimester
     for (const [trimester, materiaData] of Object.entries(trimesterData)) {
-      // Create new workbook from template for this trimester
-
       const workbook = new ExcelJS.Workbook();
-      const basePath = path.join(
-        __dirname,
-        "..",
-        "temp",
-        `curso_${cursoId}_${year}.xlsx`
-      );
-      await workbook.xlsx.readFile(basePath);
+      await workbook.xlsx.load(baseBuffer);
 
-      // Process each materia in this trimester
+      // Process materias
       for (const [materiaName, monthData] of Object.entries(materiaData)) {
         const sheetName = SHEET_NAMES[materiaName];
         if (!sheetName) {
@@ -340,61 +330,22 @@ const generateExcelReport = async (req, res) => {
         }
       }
 
-      // Save trimester report
-      const tempPath = path.join(
-        __dirname,
-        "..",
-        "temp",
-        `trimestre_${trimester}_${cursoId}_${Date.year()}.xlsx`
-      );
-
-      await workbook.xlsx.writeFile(tempPath);
+      // Save trimester to buffer and add to ZIP
+      const trimesterBuffer = await workbook.xlsx.writeBuffer();
+      archive.append(trimesterBuffer, {
+          name: `Trimestre_${trimester}_${year}.xlsx`
+      });
     }
 
-    // After generating all reports, create zip
-    const zipPath = path.join(__dirname, '..', 'temp', `reportes_${cursoId}_${year}.zip`);
-    const output = fs.createWriteStream(zipPath);
-    const archive = archiver('zip', {
-        zlib: { level: 9 }
-    });
+    // Set response headers
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 
+        `attachment; filename=reportes_${cursoId}_${year}.zip`
+    );
 
-    output.on('close', () => {
-        // Send zip file
-        res.download(zipPath, `reportes_${cursoId}_${year}.zip`, (err) => {
-            if (err) {
-                console.error('Error downloading zip:', err);
-            }
-            // Clean up
-            fs.unlinkSync(zipPath);
-            // Delete individual excel files
-            for (let i = 1; i <= 3; i++) {
-                const excelPath = path.join(__dirname, '..', 'temp', 
-                    `trimestre_${i}_${cursoId}_${year}.xlsx`);
-                if (fs.existsSync(excelPath)) {
-                    fs.unlinkSync(excelPath);
-                }
-            }
-        });
-    });
-
-    archive.on('error', (err) => {
-        throw err;
-    });
-
-    archive.pipe(output);
-
-    // Add excel files to zip
-    for (let i = 1; i <= 3; i++) {
-        const excelPath = path.join(__dirname, '..', 'temp', 
-            `trimestre_${i}_${cursoId}_${year}.xlsx`);
-        if (fs.existsSync(excelPath)) {
-            archive.file(excelPath, { 
-                name: `Trimestre_${i}_${year}.xlsx` 
-            });
-        }
-    }
-
+    // Finalize and send
     await archive.finalize();
+    zipStream.pipe(res);
 
   } catch (error) {
     console.error("Error generating report:", error);
