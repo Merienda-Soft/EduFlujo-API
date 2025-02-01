@@ -1,6 +1,7 @@
 const ExcelJS = require("exceljs");
 const fs = require("fs");
 const path = require("path");
+const archiver = require('archiver');
 const Actividad = require("../models/activity");
 const Registration = require("../models/registration");
 const Materia = require("../models/subject");
@@ -350,10 +351,51 @@ const generateExcelReport = async (req, res) => {
       await workbook.xlsx.writeFile(tempPath);
     }
 
-    return res.status(200).json({
-      ok: true,
-      msg: "Reportes generados correctamente",
+    // After generating all reports, create zip
+    const zipPath = path.join(__dirname, '..', 'temp', `reportes_${cursoId}_${year}.zip`);
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver('zip', {
+        zlib: { level: 9 }
     });
+
+    output.on('close', () => {
+        // Send zip file
+        res.download(zipPath, `reportes_${cursoId}_${year}.zip`, (err) => {
+            if (err) {
+                console.error('Error downloading zip:', err);
+            }
+            // Clean up
+            fs.unlinkSync(zipPath);
+            // Delete individual excel files
+            for (let i = 1; i <= 3; i++) {
+                const excelPath = path.join(__dirname, '..', 'temp', 
+                    `trimestre_${i}_${cursoId}_${year}.xlsx`);
+                if (fs.existsSync(excelPath)) {
+                    fs.unlinkSync(excelPath);
+                }
+            }
+        });
+    });
+
+    archive.on('error', (err) => {
+        throw err;
+    });
+
+    archive.pipe(output);
+
+    // Add excel files to zip
+    for (let i = 1; i <= 3; i++) {
+        const excelPath = path.join(__dirname, '..', 'temp', 
+            `trimestre_${i}_${cursoId}_${year}.xlsx`);
+        if (fs.existsSync(excelPath)) {
+            archive.file(excelPath, { 
+                name: `Trimestre_${i}_${year}.xlsx` 
+            });
+        }
+    }
+
+    await archive.finalize();
+
   } catch (error) {
     console.error("Error generating report:", error);
     return res.status(500).json({

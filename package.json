@@ -27,6 +27,7 @@
   "homepage": "https://github.com/Merienda-Soft/EduFlujo-API#readme",
   "dependencies": {
     "@sendgrid/mail": "^8.1.4",
+    "archiver": "^7.0.1",
     "auth0": "^4.10.0",
     "axios": "^1.7.7",
     "cors": "^2.8.5",
