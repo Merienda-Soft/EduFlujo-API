@@ -10,12 +10,12 @@ const RegistrationSchema = new Schema({
     type: String, 
     required: true 
   },
-  cursos: [
+  curso: 
     {
       type: mongoose.Schema.Types.ObjectId,  
       ref: 'cursos'
     }
-  ],
+  ,
   ci: { 
     type: String, 
     default: "" 
