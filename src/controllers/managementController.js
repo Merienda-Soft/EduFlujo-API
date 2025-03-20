@@ -19,6 +19,21 @@ const getManagementNow = async (req, res) => {
     }
 };
 
+const getManagements = async (req, res) => {
+  try {
+      const managements = await Management.find();
+      
+      if (!managements) {
+          return res.status(404).json({ message: "No hay gestiones" });
+      }
+      
+      res.status(200).json(managements);
+  } catch (error) {
+      console.error("Server error:", error);
+      res.status(500).json({ message: "Server error", error });
+  }
+};
+
 const createManagement = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -78,4 +93,5 @@ module.exports = {
     getManagementNow,
     createManagement,
     deleteManagement,
+    getManagements
 };

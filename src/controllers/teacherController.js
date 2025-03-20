@@ -33,7 +33,7 @@ const getProfesorByEmail = async (req, res) => {
             return res.status(404).json({ error: "Profesor no encontrado" });
         }
 
-        const asignaciones = await Asignacion.find({ professor: profesor.id })
+        const asignaciones = await Asignacion.find({ professor: profesor.id, management: req.params.management })
         .populate('curso', 'name') // Esto obtiene el nombre del curso
         .populate('materias', 'name'); // Esto obtiene el nombre de cada materia
 
