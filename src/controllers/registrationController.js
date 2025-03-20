@@ -63,6 +63,18 @@ const getInscripcionById = async (req, res) => {
     }
 };
 
+const getInscriptionsByCourseId = async (req, res) => {
+    try {
+        const inscripciones = await Inscripcion.find({ curso: req.params.cursoId }).select('rude');
+        if (!inscripciones || inscripciones.length === 0) {
+          return res.status(200).json([]);
+        }
+        res.status(200).json(inscripciones);
+      } catch (error) {
+        res.status(500).json({ error: 'Error al obtener las Inscripciones para el curso' });
+      }
+};
+
 // Crear una nueva inscripción
 const createInscripcion = async (req, res) => {
     const errors = validationResult(req);
@@ -70,13 +82,13 @@ const createInscripcion = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    const { name, datebirth, cursos, ci, departamento, gender, localidad, matricula, pais, provincia, rude } = req.body;
+    const { name, datebirth, curso, ci, departamento, gender, localidad, matricula, pais, provincia, rude } = req.body;
 
     try {
         const newInscripcion = new Inscripcion({
             name,
             datebirth,
-            cursos,
+            curso,
             ci,
             departamento,
             gender,
@@ -150,5 +162,6 @@ module.exports = {
     createInscripcion,
     updateInscripcion,
     deleteInscripcion,
-    getStudentsByCourseAndSubject
+    getStudentsByCourseAndSubject,
+    getInscriptionsByCourseId,
 };

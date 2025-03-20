@@ -49,7 +49,12 @@ const RegistrationSchema = new Schema({
   rude: { 
     type: String, 
     default: "" 
-  }
+  },
+  management: {
+    type: Number,
+    required: true,
+    default: () => new Date().getFullYear()
+  },
 }, { collection: 'inscripciones' });
 
 module.exports = mongoose.model('inscripciones', RegistrationSchema);

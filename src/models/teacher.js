@@ -10,6 +10,11 @@ const TeacherSchema = new Schema({
     type: String,
     required: true
   },
+  management: {
+    type: Number,
+    required: true,
+    default: () => new Date().getFullYear()
+  },
 });
 
 module.exports = mongoose.model('profesors', TeacherSchema);

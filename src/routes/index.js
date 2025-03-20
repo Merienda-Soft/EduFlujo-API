@@ -19,6 +19,7 @@ const attendanceRoutes = require('./routes_attendance')
 const reportRoutes = require('./routes_report');
 const pdfRoutes = require('./routes_pdf')
 const asignacionRoutes = require('./routes_asignacion')
+const managementRoutes = require('./routes_management');
 
 // Usar las rutas con prefijos
 router.use('/activities', activityRoutes);
@@ -33,5 +34,6 @@ router.use('/attendances', attendanceRoutes);
 router.use('/reports', reportRoutes);
 router.use('/asignaciones', asignacionRoutes);
 router.use('/pdf', pdfRoutes);
+router.use('/managements', managementRoutes);
 
 module.exports = router;

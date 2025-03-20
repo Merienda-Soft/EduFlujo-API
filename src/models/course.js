@@ -16,6 +16,11 @@ const CourseSchema = new Schema({
     required: false,
     default: 0
   },
+  management: {
+    type: Number,
+    required: true,
+    //default: () => new Date().getFullYear()
+  },
   materias: [
     { 
         type: mongoose.Schema.Types.ObjectId, 

@@ -21,6 +21,11 @@ const AttendanceSchema = new Schema({
     type: Date,
     required: true,
   },
+  management: {
+    type: Number,
+    required: true,
+    default: () => new Date().getFullYear()
+  },
   attendances: [
     {
       studentid: {
