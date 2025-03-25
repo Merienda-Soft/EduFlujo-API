@@ -12,10 +12,12 @@
   "description": "",
   "devDependencies": {
     "nodemon": "^3.1.9",
+    "prisma": "^6.5.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
   },
   "dependencies": {
+    "@prisma/client": "^6.5.0",
     "express": "^4.21.2"
   }
 }
