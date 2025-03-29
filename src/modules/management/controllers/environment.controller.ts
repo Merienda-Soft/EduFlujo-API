@@ -1,14 +1,11 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { EnvironmentService } from '../services/environment.service';
 
 export class EnvironmentController {
     private academicService: EnvironmentService;
-    private prisma: PrismaClient;
 
     constructor() {
-        this.prisma = new PrismaClient();
-        this.academicService = new EnvironmentService(this.prisma);
+        this.academicService = new EnvironmentService();
     }
 
     async createAcademicYear(req: Request, res: Response) {

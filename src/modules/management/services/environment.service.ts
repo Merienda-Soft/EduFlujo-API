@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import Database from '../../../shared/database/connection';
 
-export class EnvironmentService  {
-  constructor(private prisma: PrismaClient) {}
+export class EnvironmentService {
+  private prisma = Database.getInstance();
 
   async createAcademicYearWithCourses(transactionData: {
     managementData: {
@@ -68,7 +68,7 @@ export class EnvironmentService  {
             });
           }
 
-          // Crear el environment (relación curso-gestión)
+          //Environment (curso-gestión)
           return tx.environment.create({
             data: {
               management_id: management.id,
