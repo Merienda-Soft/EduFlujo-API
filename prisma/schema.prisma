@@ -20,6 +20,8 @@ model Assignment {
   environment_id Int?
   professor     Professor?  @relation(fields: [professor_id], references: [id])
   professor_id  Int?
+  subject     Subject?  @relation(fields: [subject_id], references: [id])
+  subject_id  Int?
 }
 
 model Attendance {
@@ -203,6 +205,7 @@ model Subject {
   contents    Content[]
   gradeSubjects GradeSubject[]
   taskAssignments TaskAssignment[]
+  assignments Assignment[]
 }
 
 model TaskAssignment {
