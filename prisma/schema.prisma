@@ -139,18 +139,17 @@ model Person {
   status           Int?
   departament      Departament? @relation(fields: [departament_id], references: [id])
   departament_id   Int?
-  professors       Professor[]
-  students         Student[]
-  tutors           Tutor[]
+  professor        Professor?
+  student          Student?
+  tutor            Tutor?
 }
 
 model Professor {
-  id          Int       @id @default(autoincrement()) @map("_id")
+  id          Int       @id 
   is_tecnical Int?
   subjects    String?   
   status      Int?
-  person      Person?   @relation(fields: [person_id], references: [id])
-  person_id   Int?
+  person      Person    @relation(fields: [id], references: [id]) 
   assignments Assignment[]
   attendances Attendance[]
   taskAssignments TaskAssignment[]
@@ -162,16 +161,6 @@ model Province {
   town         Town?        @relation(fields: [town_id], references: [id])
   town_id      Int?
   departaments Departament[]
-}
-
-model Quarter {
-  id            Int       @id @default(autoincrement()) @map("_id")
-  first_start   DateTime?
-  first_end     DateTime?
-  second_start  DateTime?
-  second_end    DateTime?
-  third_start   DateTime?
-  third_end     DateTime?
 }
 
 model Registration {
@@ -192,19 +181,16 @@ model Setting {
 }
 
 model Student {
-  id        Int       @id @default(autoincrement()) @map("_id")
+  id        Int       @id 
   matricula String?   
   rude      Int?
-  tutor     Tutor?    @relation("TutorMainStudent", fields: [tutor_id], references: [id])
-  tutor_id  Int?      @unique
-  tutors    Tutor[]   @relation("TutorAdditionalStudents")
-  person    Person?   @relation(fields: [person_id], references: [id])
-  person_id Int?
+  person    Person    @relation(fields: [id], references: [id])
   total     Int?
   attendances Attendance[]
   gradeSubjects GradeSubject[]
   registrations Registration[]
   taskAssignments TaskAssignment[]
+  tutors    Tutorship[]  
 }
 
 model Subject {
@@ -250,13 +236,22 @@ model Town {
 }
 
 model Tutor {
-  id        Int      @id @default(autoincrement()) @map("id_")
-  student   Student? @relation("TutorMainStudent")
-  student_id Int?    @unique
+  id        Int       @id  
   status    Int?
-  person    Person?  @relation(fields: [person_id], references: [id])
-  person_id Int?
-  students  Student[] @relation("TutorAdditionalStudents")
+  person    Person    @relation(fields: [id], references: [id])
+  students  Tutorship[] 
 }
+
+model Tutorship {
+  tutor      Tutor     @relation(fields: [tutor_id], references: [id])
+  tutor_id   Int
+  student    Student   @relation(fields: [student_id], references: [id])
+  student_id Int
+  relacion   String    // "padre", "madre", "apoderado", etc.
+  createdAt  DateTime  @default(now())
+
+  @@id([tutor_id, student_id])
+}
+
 
 

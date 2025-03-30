@@ -2,11 +2,7 @@ import { Request, Response } from 'express';
 import { EnvironmentService } from '../services/environment.service';
 
 export class EnvironmentController {
-    private academicService: EnvironmentService;
-
-    constructor() {
-        this.academicService = new EnvironmentService();
-    }
+    private academicService = new EnvironmentService;
 
     async createAcademicYear(req: Request, res: Response) {
         try {

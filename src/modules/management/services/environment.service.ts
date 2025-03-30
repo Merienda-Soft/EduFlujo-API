@@ -24,7 +24,7 @@ export class EnvironmentService {
     }>;
   }) {
     return this.prisma.$transaction(async (tx) => {
-      // 1. Crear la gestión académica
+      //Crear la gestión académica
       const management = await tx.management.create({
         data: {
           management: transactionData.managementData.year,
