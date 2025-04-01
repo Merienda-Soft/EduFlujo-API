@@ -16,8 +16,10 @@ datasource db {
 
 model Assignment {
   id            Int         @id @default(autoincrement()) @map("_id")
-  environment   Environment? @relation(fields: [environment_id], references: [id])
-  environment_id Int?
+  quarter         String?
+  status          Int?
+  course   Course? @relation(fields: [course_id], references: [id])
+  course_id Int?
   professor     Professor?  @relation(fields: [professor_id], references: [id])
   professor_id  Int?
   subject     Subject?  @relation(fields: [subject_id], references: [id])
@@ -26,17 +28,26 @@ model Assignment {
 
 model Attendance {
   id              Int       @id @default(autoincrement()) @map("_id")
-  student         Student?   @relation(fields: [student_id], references: [id])
-  student_id      Int?
+  attendance_date DateTime?
+  quarter         String? 
+  management      Management? @relation(fields: [management_id], references: [id])
+  management_id   Int?   
+  subject         Subject?   @relation(fields: [subject_id], references: [id])
+  subject_id      Int? 
   professor       Professor? @relation(fields: [professor_id], references: [id])
   professor_id    Int?
-  subject         Subject?   @relation(fields: [subject_id], references: [id])
-  subject_id      Int?
-  attendance      String?    @db.Char(10)
-  attendance_date DateTime?
-  management      Management? @relation(fields: [management_id], references: [id])
-  management_id   Int?
-  quarter         String?    
+  course        Course?   @relation(fields: [course_id], references: [id])
+  course_id     Int?
+  attendances AttendanceRecord[]
+}
+
+model AttendanceRecord {
+  id              Int       @id @default(autoincrement()) @map("_id")
+  attendance         Attendance?   @relation(fields: [attendance_id], references: [id])
+  attendance_id      Int?
+  student         Student?   @relation(fields: [student_id], references: [id])
+  student_id      Int?
+  status_attendance      String?    @db.Char(10)   
 }
 
 model Category {
@@ -47,12 +58,14 @@ model Category {
 
 model Content {
   id            Int       @id @default(autoincrement()) @map("_id")
-  environment   Environment? @relation(fields: [environment_id], references: [id])
-  environment_id Int?
+  course   Course? @relation(fields: [course_id], references: [id])
+  course_id Int?
   subject       Subject?   @relation(fields: [subject_id], references: [id])
   subject_id    Int?
   category      Category?  @relation(fields: [category_id], references: [id])
   category_id   Int?
+  management      Management? @relation(fields: [management_id], references: [id])
+  management_id   Int? 
 }
 
 model Course {
@@ -62,8 +75,16 @@ model Course {
   last_update DateTime?
   degree      Degree?     @relation(fields: [degree_id], references: [id])
   degree_id   Int?
-  environments Environment[]
-  subjects    Subject[]
+  management    Management? @relation(fields: [management_id], references: [id])
+  management_id Int?
+  curriculums    Curriculum[]
+  attendances Attendance[]
+  tasks       Task[]
+  assignments   Assignment[]
+  contents      Content[]
+  marks       Mark[]
+  registrations   Registration[]
+  marks_subject MarkSubject[]
 }
 
 model Degree {
@@ -84,32 +105,31 @@ model Dimension {
   id        Int     @id @default(autoincrement()) @map("_id")
   dimension String? 
   value     Int?
-  taskAssignments TaskAssignment[]
+  tasks Task[]
 }
 
-model Environment {
+model Mark {
   id            Int       @id @default(autoincrement()) @map("_id")
-  management    Management? @relation(fields: [management_id], references: [id])
-  management_id Int?
-  course        Course?   @relation(fields: [course_id], references: [id])
-  course_id     Int?
-  status        Int?
-  assignments   Assignment[]
-  contents      Content[]
-  gradeSubjects GradeSubject[]
-  registrations Registration[]
-}
-
-model GradeSubject {
-  id            Int       @id @default(autoincrement()) @map("_id")
+  total     Int?
   student       Student?  @relation(fields: [student_id], references: [id])
   student_id    Int?
-  environment   Environment? @relation(fields: [environment_id], references: [id])
-  environment_id Int?
-  subject       Subject?  @relation(fields: [subject_id], references: [id])
+  course    Course?  @relation(fields: [course_id], references: [id])
+  course_id Int?
+  management       Management? @relation(fields: [management_id], references: [id])
+  management_id    Int?
+}
+
+model MarkSubject {
+  id            Int       @id @default(autoincrement()) @map("_id")
+  mark_subject        Int?
+  student       Student?  @relation(fields: [student_id], references: [id])
+  student_id    Int?
+  course    Course?  @relation(fields: [course_id], references: [id])
+  course_id Int?
+  subject     Subject? @relation(fields: [subject_id], references: [id])
   subject_id    Int?
-  grade         Int?
-  quarter       String?   
+  management       Management? @relation(fields: [management_id], references: [id])
+  management_id    Int?
 }
 
 model Management {
@@ -124,9 +144,14 @@ model Management {
   second_quarter_end   String?   @db.Char(10)
   third_quarter_start  String?   @db.Char(10)
   third_quarter_end    String?   @db.Char(10)
-  environments         Environment[]
+  courses         Course[]
   attendances         Attendance[]
-  taskAssignments     TaskAssignment[]
+  tasks     Task[]
+  curriculums    Curriculum[]
+  marks       Mark[]
+  marks_subject MarkSubject[]
+  contents      Content[]
+  registrations   Registration[]
 }
 
 model Person {
@@ -154,7 +179,7 @@ model Professor {
   person      Person    @relation(fields: [id], references: [id]) 
   assignments Assignment[]
   attendances Attendance[]
-  taskAssignments TaskAssignment[]
+  tasks Task[]
 }
 
 model Province {
@@ -167,10 +192,12 @@ model Province {
 
 model Registration {
   id            Int       @id @default(autoincrement()) @map("_id")
-  environment   Environment? @relation(fields: [environment_id], references: [id])
-  environment_id Int?
+  course   Course? @relation(fields: [course_id], references: [id])
+  course_id Int?
   student       Student?    @relation(fields: [student_id], references: [id])
   student_id    Int?
+  management       Management? @relation(fields: [management_id], references: [id])
+  management_id    Int?
 }
 
 model Setting {
@@ -178,6 +205,7 @@ model Setting {
   institution_logo  String? 
   institution_name  String? 
   active_management Int?
+  management_id     Int?
   tutor_access      Int?
   active_quarter    String? 
 }
@@ -187,49 +215,70 @@ model Student {
   matricula String?   
   rude      Int?
   person    Person    @relation(fields: [id], references: [id])
-  total     Int?
-  attendances Attendance[]
-  gradeSubjects GradeSubject[]
+  attendances AttendanceRecord[]
   registrations Registration[]
   taskAssignments TaskAssignment[]
   tutors    Tutorship[]  
+  marks     Mark[]
+  marks_subject MarkSubject[]
 }
 
 model Subject {
   id          Int       @id @default(autoincrement()) @map("_id")
   subject     String?   
   is_tecnical Int?
-  course      Course?   @relation(fields: [course_id], references: [id])
-  course_id   Int?
+  status      Int?
   attendances Attendance[]
   contents    Content[]
-  gradeSubjects GradeSubject[]
-  taskAssignments TaskAssignment[]
+  tasks Task[]
   assignments Assignment[]
+  curriculums Curriculum[]
+  marks       MarkSubject[]
+}
+
+model Curriculum {
+  id          Int       @id @default(autoincrement()) @map("_id")
+  course      Course?   @relation(fields: [course_id], references: [id])
+  course_id   Int?
+  subject      Subject?   @relation(fields: [subject_id], references: [id])
+  subject_id   Int?
+  management    Management? @relation(fields: [management_id], references: [id])
+  management_id Int?
+}
+
+model Task {
+  id          Int       @id @default(autoincrement()) @map("_id")
+  name        String?
+  description String?
+  weight           Int?
+  is_autoevaluation Int?
+  dimension   Dimension @relation(fields: [dimension_id], references: [id])
+  dimension_id Int
+  management       Management? @relation(fields: [management_id], references: [id])
+  management_id    Int?
+  professor        Professor?  @relation(fields: [professor_id], references: [id])
+  professor_id     Int?
+  subject          Subject?    @relation(fields: [subject_id], references: [id])
+  subject_id       Int?
+  course        Course?   @relation(fields: [course_id], references: [id])
+  course_id     Int?
+  quarter          String?
+  create_date DateTime? @default(now())
+  last_update DateTime?
+  start_date  DateTime?
+  end_date    DateTime?
+  assignments TaskAssignment[]
 }
 
 model TaskAssignment {
-  id               Int       @id @default(autoincrement()) @map("_id")
-  student          Student?  @relation(fields: [student_id], references: [id])
+  id               Int         @id @default(autoincrement()) @map("_id")
+  task             Task        @relation(fields: [task_id], references: [id])
+  task_id          Int
+  student          Student?    @relation(fields: [student_id], references: [id])
   student_id       Int?
-  professor        Professor? @relation(fields: [professor_id], references: [id])
-  professor_id     Int?
-  subject          Subject?  @relation(fields: [subject_id], references: [id])
-  subject_id       Int?
-  dimension        Dimension? @relation(fields: [dimension_id], references: [id])
-  dimension_id     Int?
-  is_autoevaluation Int?
-  management       Management? @relation(fields: [management_id], references: [id])
-  management_id    Int?
-  qualification    String?   @db.Char(10)
-  weight           Int?
-  description      String?   
-  name             String?   
-  create_date      DateTime?
-  last_update      DateTime?
-  start_date       DateTime?
-  end_date         DateTime?
-  quarter          String?   
+  qualification    String?     @db.Char(10)
+  assigned_date    DateTime?   @default(now())
+  completed_date   DateTime?
 }
 
 model Town {
