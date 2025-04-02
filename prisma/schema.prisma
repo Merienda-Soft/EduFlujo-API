@@ -271,14 +271,15 @@ model Task {
 }
 
 model TaskAssignment {
-  id               Int         @id @default(autoincrement()) @map("_id")
   task             Task        @relation(fields: [task_id], references: [id])
   task_id          Int
-  student          Student?    @relation(fields: [student_id], references: [id])
-  student_id       Int?
+  student          Student    @relation(fields: [student_id], references: [id])
+  student_id       Int
   qualification    String?     @db.Char(10)
   assigned_date    DateTime?   @default(now())
   completed_date   DateTime?
+
+  @@id([task_id, student_id])
 }
 
 model Town {
