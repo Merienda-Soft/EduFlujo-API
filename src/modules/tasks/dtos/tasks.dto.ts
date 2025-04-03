@@ -17,6 +17,8 @@ export const createTaskSchema = z.object({
   quarter: z.string().max(10).optional(),
   start_date: z.coerce.date().optional(),
   end_date: z.coerce.date().optional(),
+  status: z.number().int().min(0).max(1).optional()
+    .describe("Indica si la tarea está activa (0: Eliminado, 1: Activo)").default(1),
 });
 
 // Schema para la asignación de tarea a estudiantes
@@ -64,6 +66,8 @@ export class TaskResponseDto {
     public readonly last_update: Date,
     public readonly start_date: Date,
     public readonly end_date: Date,
+    public readonly status: number,
+    public readonly delete_at: Date | null,
     public readonly assignments: TaskAssignmentResponseDto[]
   ) { }
 
@@ -84,6 +88,8 @@ export class TaskResponseDto {
       entity.last_update,
       entity.start_date,
       entity.end_date,
+      entity.status,
+      entity.delete_at,
       entity.assignments?.map(assignment =>
         TaskAssignmentResponseDto.fromEntity(assignment)
       ) || []

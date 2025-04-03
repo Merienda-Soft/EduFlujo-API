@@ -263,8 +263,10 @@ model Task {
   course        Course?   @relation(fields: [course_id], references: [id])
   course_id     Int?
   quarter          String?
+  status           Int? // 0: Eliminado, 1: Activo
   create_date DateTime? @default(now())
   last_update DateTime?
+  deleted_at DateTime?
   start_date  DateTime?
   end_date    DateTime?
   assignments TaskAssignment[]

@@ -69,6 +69,9 @@ export class TasksService {
 
     async getAllTasks() {
         return await this.db.task.findMany({
+            where: {
+                status: 1
+            },
             include: {
                 assignments: true,
                 professor: {
@@ -82,7 +85,10 @@ export class TasksService {
 
     async getTaskById(id: number) {
         return await this.db.task.findUnique({
-            where: { id },
+            where: { 
+                id,
+                status: 1
+            },
             include: {
                 assignments: true,
                 professor: {
@@ -108,14 +114,13 @@ export class TasksService {
     }
 
     async deleteTask(id: number) {
-        // Primero eliminar las asignaciones
-        await this.db.taskAssignment.deleteMany({
-            where: { task_id: id }
-        });
-
-        // Luego eliminar la tarea
-        return await this.db.task.delete({
-            where: { id }
+        return await this.db.task.update({
+            where: { id },
+            data: {
+                status: 0,
+                deleted_at: new Date(),
+                last_update: new Date()
+            }
         });
     }
 
@@ -137,6 +142,7 @@ export class TasksService {
     async getTasksByStudent(studentId: number) {
         return await this.db.task.findMany({
             where: {
+                status: 1,
                 assignments: {
                     some: {
                         student_id: studentId
@@ -158,6 +164,7 @@ export class TasksService {
     async getTasksByProfessor(professorId: number) {
         return await this.db.task.findMany({
             where: {
+                status: 1,
                 professor_id: professorId
             },
             include: {
