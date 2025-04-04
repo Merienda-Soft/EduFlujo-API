@@ -11,7 +11,13 @@ export class ProfessorService {
                 }
             },
             include: {
-                person: true
+                person: true,
+                assignments: {
+                    include: {
+                        course: true,
+                        subject: true
+                    }
+                }
             }
         });
     }
