@@ -1,2 +1,3 @@
 import { tasksRouter } from './tasks.routes';
-export default tasksRouter; 
+import { managementRouter } from './management.routes';
+export { tasksRouter, managementRouter }; 
