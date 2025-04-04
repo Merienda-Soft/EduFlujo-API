@@ -17,7 +17,7 @@ export const tasksRouter = (() => {
 
     // Rutas para filtros específicos
     router.get('/student/:studentId', tController.getTasksByStudent.bind(tController));
-    router.get('/professor/:professorId', tController.getTasksByProfessor.bind(tController));
+    router.get('/professor/:professorId/course/:courseId/subject/:subjectId/management/:managementId', tController.getTasksByProfessorCourseSubjectManagement.bind(tController));
 
     return router;
 })();

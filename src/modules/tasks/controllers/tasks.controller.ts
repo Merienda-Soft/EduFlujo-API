@@ -86,10 +86,10 @@ export class TasksController {
         }
     }
 
-    async getTasksByProfessor(req: Request, res: Response) {
+    async getTasksByProfessorCourseSubjectManagement(req: Request, res: Response) {
         try {
-            const { professorId } = req.params;
-            const result = await this.service.getTasksByProfessor(Number(professorId));
+            const { professorId, courseId, subjectId, managementId } = req.params;
+            const result = await this.service.getTasksByProfessorCourseSubjectManagement(Number(professorId), Number(courseId), Number(subjectId), Number(managementId));
             res.status(200).json(result);
         } catch (error) {
             this.handleError(res, error);

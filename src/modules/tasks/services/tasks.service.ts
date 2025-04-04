@@ -161,11 +161,14 @@ export class TasksService {
         });
     }
 
-    async getTasksByProfessor(professorId: number) {
+    async getTasksByProfessorCourseSubjectManagement(professorId: number, courseId: number, subjectId: number, managementId: number) {
         return await this.db.task.findMany({
             where: {
                 status: 1,
-                professor_id: professorId
+                professor_id: professorId,
+                course_id: courseId,
+                subject_id: subjectId,
+                management_id: managementId
             },
             include: {
                 assignments: true,
