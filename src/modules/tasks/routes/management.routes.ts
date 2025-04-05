@@ -6,6 +6,7 @@ export const managementRouter = (() => {
     const managementController = new ManagementController();
 
     router.get('/', managementController.getManagements.bind(managementController));
+    router.get('/active', managementController.getActiveManagement.bind(managementController));
 
     return router;
 })();

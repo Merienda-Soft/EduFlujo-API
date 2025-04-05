@@ -19,6 +19,26 @@ export class ManagementController {
         }
     }
 
+    async getActiveManagement(req: Request, res: Response) {
+        try {
+            const management = await this.service.getActiveManagement();
+
+            if (!management) {
+                return res.status(404).json({ 
+                    ok: false,
+                    error: 'No se encontró un período lectivo activo' 
+                });
+            }
+
+            res.status(200).json({
+                ok: true,
+                data: management
+            });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
     private handleError(res: Response, error: any) {
         console.error(error);
         res.status(500).json({ error: 'Error interno del servidor', success: false });
