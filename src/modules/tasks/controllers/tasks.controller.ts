@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { TasksService } from '../services/tasks.service';
-import { createTaskWithAssignmentsSchema } from '../dtos/tasks.dto';
+import { createTaskWithAssignmentsSchema, gradeTaskSchema } from '../dtos/tasks.dto';
 import { ZodError } from 'zod';
 
 export class TasksController {
@@ -43,7 +43,7 @@ export class TasksController {
         try {
             const { id } = req.params;
             const result = await this.service.updateTask(Number(id), req.body);
-            res.status(200).json(result);
+            res.status(200).json({ result, "ok": true });
         } catch (error) {
             this.handleError(res, error);
         }
@@ -53,26 +53,30 @@ export class TasksController {
         try {
             const { id } = req.params;
             await this.service.deleteTask(Number(id));
-            res.status(200).json({ message: 'Tarea eliminada exitosamente' });
+            res.status(200).json({ message: 'Tarea eliminada exitosamente', "ok": true });
         } catch (error) {
             this.handleError(res, error);
+            res.status(500).json({ message: 'Error al eliminar la tarea', "ok": false });
         }
     }
 
     async gradeTask(req: Request, res: Response) {
         try {
-            const { taskId, studentId } = req.params;
-            const { qualification } = req.body;
+            const { taskId } = req.params;
+            const data = gradeTaskSchema.parse(req.body);
 
             const result = await this.service.gradeTask(
                 Number(taskId),
-                Number(studentId),
-                qualification
+                data
             );
 
-            res.status(200).json(result);
+            res.status(200).json({result, "ok": true});
         } catch (error) {
-            this.handleError(res, error);
+            if (error instanceof ZodError) {
+                res.status(400).json({ error: error.errors, ok: false });
+            } else {
+                this.handleError(res, error);
+            }
         }
     }
 
@@ -96,8 +100,24 @@ export class TasksController {
         }
     }
 
+    async getTaskByIdWithAssignments(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+            const result = await this.service.getTaskById(Number(id));
+            if (!result) {
+                return res.status(404).json({ error: 'Tarea no encontrada', ok: false });
+            }
+            res.status(200).json({ 
+                ok: true,
+                task: result
+            });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
     private handleError(res: Response, error: any) {
         console.error(error);
-        res.status(500).json({ error: 'Error interno del servidor' });
+        res.status(500).json({ error: 'Error interno del servidor', "ok": false });
     }
 } 

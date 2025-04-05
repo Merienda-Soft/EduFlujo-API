@@ -1,13 +1,32 @@
 import Database from '../../../shared/database/connection';
-import { CreateTaskWithAssignmentsDto, TaskAssignmentDto } from '../dtos/tasks.dto';
+import { CreateTaskWithAssignmentsDto, TaskAssignmentDto, GradeTaskDto } from '../dtos/tasks.dto';
 
 export class TasksService {
     private db = Database.getInstance();
 
     async createTask(data: CreateTaskWithAssignmentsDto) {
-        const { task, assignments } = data;
+        const { task, assignments = [] } = data;
 
         return await this.db.$transaction(async (tx) => {
+            // Si no hay assignments específicos, obtener todos los estudiantes del curso
+            let studentsToAssign = assignments;
+            
+            if (assignments.length === 0) {
+                const registrations = await tx.registration.findMany({
+                    where: {
+                        course_id: task.course_id,
+                        management_id: task.management_id
+                    },
+                    select: {
+                        student_id: true
+                    }
+                });
+                studentsToAssign = registrations.map(reg => ({
+                    student_id: reg.student_id,
+                    assigned_date: new Date()
+                }));
+            }
+
             // Crear la tarea
             const createdTask = await tx.task.create({
                 data: {
@@ -20,6 +39,7 @@ export class TasksService {
                     end_date: task.end_date,
                     create_date: new Date(),
                     last_update: new Date(),
+                    status: 1,
                     dimension: {
                         connect: { id: task.dimension_id }
                     },
@@ -39,12 +59,12 @@ export class TasksService {
             });
 
             // Crear las asignaciones
-            const assignmentPromises = assignments.map(assignment =>
+            const assignmentPromises = studentsToAssign.map(student =>
                 tx.taskAssignment.create({
                     data: {
                         task_id: createdTask.id,
-                        student_id: assignment.student_id,
-                        assigned_date: new Date()
+                        student_id: student.student_id,
+                        assigned_date: student.assigned_date
                     }
                 })
             );
@@ -54,7 +74,15 @@ export class TasksService {
             return await tx.task.findUnique({
                 where: { id: createdTask.id },
                 include: {
-                    assignments: true,
+                    assignments: {
+                        include: {
+                            student: {
+                                include: {
+                                    person: true
+                                }
+                            }
+                        }
+                    },
                     professor: {
                         include: { person: true }
                     },
@@ -90,12 +118,21 @@ export class TasksService {
                 status: 1
             },
             include: {
-                assignments: true,
-                professor: {
-                    include: { person: true }
+                assignments: {
+                    include: {
+                        student: {
+                            include: {
+                                person: {
+                                    select: {
+                                        name: true,
+                                        lastname: true,
+                                        second_lastname: true
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
-                subject: true,
-                dimension: true
             }
         });
     }
@@ -124,18 +161,29 @@ export class TasksService {
         });
     }
 
-    async gradeTask(taskId: number, studentId: number, qualification: string) {
-        return await this.db.taskAssignment.update({
-            where: {
-                task_id_student_id: {
-                    task_id: taskId,
-                    student_id: studentId
-                }
-            },
-            data: {
-                qualification,
-                completed_date: new Date()
-            }
+    async gradeTask(taskId: number, data: GradeTaskDto) {
+        return await this.db.$transaction(async (tx) => {
+            const updatePromises = data.students.map(student =>
+                tx.taskAssignment.update({
+                    where: {
+                        task_id_student_id: {
+                            task_id: taskId,
+                            student_id: student.student_id
+                        }
+                    },
+                    data: {
+                        qualification: student.qualification,
+                        completed_date: new Date()
+                    }
+                })
+            );
+
+            const results = await Promise.all(updatePromises);
+            return {
+                ok: true,
+                message: 'Calificaciones actualizadas exitosamente',
+                updated: results.length
+            };
         });
     }
 

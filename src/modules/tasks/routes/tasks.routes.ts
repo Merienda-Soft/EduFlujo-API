@@ -9,11 +9,12 @@ export const tasksRouter = (() => {
     router.post('/', tController.create.bind(tController));
     router.get('/', tController.getAll.bind(tController));
     router.get('/:id', tController.getById.bind(tController));
+    router.get('/:id/assignments', tController.getTaskByIdWithAssignments.bind(tController));
     router.put('/:id', tController.update.bind(tController));
-    router.delete('/:id', tController.delete.bind(tController));
+    router.post('/:id', tController.delete.bind(tController));
 
     // Rutas para calificaciones
-    router.post('/:taskId/students/:studentId/grade', tController.gradeTask.bind(tController));
+    router.post('/:taskId/grade', tController.gradeTask.bind(tController));
 
     // Rutas para filtros específicos
     router.get('/student/:studentId', tController.getTasksByStudent.bind(tController));

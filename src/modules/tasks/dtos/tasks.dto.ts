@@ -32,7 +32,7 @@ export const taskAssignmentSchema = z.object({
 // Schema combinado para crear tarea y asignarla
 export const createTaskWithAssignmentsSchema = z.object({
   task: createTaskSchema,
-  assignments: z.array(taskAssignmentSchema)
+  assignments: z.array(taskAssignmentSchema).optional()
 }).refine(data => {
   if (data.task.start_date && data.task.end_date) {
     return data.task.end_date > data.task.start_date;
@@ -43,10 +43,19 @@ export const createTaskWithAssignmentsSchema = z.object({
   path: ["task.end_date"]
 });
 
+// Schema para las calificaciones múltiples
+export const gradeTaskSchema = z.object({
+    students: z.array(z.object({
+        student_id: z.number().int().positive("El ID del estudiante es requerido"),
+        qualification: z.string().max(10, "La calificación no puede exceder 10 caracteres")
+    }))
+});
+
 // Types exportados
 export type CreateTaskDto = z.infer<typeof createTaskSchema>;
 export type TaskAssignmentDto = z.infer<typeof taskAssignmentSchema>;
 export type CreateTaskWithAssignmentsDto = z.infer<typeof createTaskWithAssignmentsSchema>;
+export type GradeTaskDto = z.infer<typeof gradeTaskSchema>;
 
 // DTO de respuesta
 export class TaskResponseDto {
