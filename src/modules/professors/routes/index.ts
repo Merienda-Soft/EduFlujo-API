@@ -1,2 +1,3 @@
 import { professorsRouter } from './professors.routes';
-export default professorsRouter;
+import { tutorStudentRouter } from './tutorStudent.routes';
+export { professorsRouter, tutorStudentRouter };
