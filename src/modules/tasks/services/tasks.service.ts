@@ -187,10 +187,13 @@ export class TasksService {
         });
     }
 
-    async getTasksByStudent(studentId: number) {
+    async getTasksByStudent(studentId: number, courseId: number, subjectId: number, managementId: number) {
         return await this.db.task.findMany({
             where: {
                 status: 1,
+                course_id: courseId,
+                subject_id: subjectId,
+                management_id: managementId,
                 assignments: {
                     some: {
                         student_id: studentId
@@ -204,7 +207,12 @@ export class TasksService {
                     }
                 },
                 subject: true,
-                dimension: true
+                dimension: true,
+                professor: {
+                    include: {
+                        person: true
+                    }
+                }
             }
         });
     }

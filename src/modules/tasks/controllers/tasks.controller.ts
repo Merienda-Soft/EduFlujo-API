@@ -82,9 +82,26 @@ export class TasksController {
 
     async getTasksByStudent(req: Request, res: Response) {
         try {
-            const { studentId } = req.params;
-            const result = await this.service.getTasksByStudent(Number(studentId));
-            res.status(200).json(result);
+            const { studentId, courseId, subjectId, managementId } = req.params;
+            
+            if (!studentId || !courseId || !subjectId || !managementId) {
+                return res.status(400).json({
+                    ok: false,
+                    error: 'Se requieren todos los parámetros: studentId, courseId, subjectId y managementId'
+                });
+            }
+
+            const result = await this.service.getTasksByStudent(
+                Number(studentId),
+                Number(courseId),
+                Number(subjectId),
+                Number(managementId)
+            );
+
+            res.status(200).json({
+                ok: true,
+                data: result
+            });
         } catch (error) {
             this.handleError(res, error);
         }

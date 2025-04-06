@@ -277,6 +277,7 @@ model TaskAssignment {
   task_id          Int
   student          Student    @relation(fields: [student_id], references: [id])
   student_id       Int
+  status           Int?   @default(0)// 0: Activo, 1: Entregado, 2: Evaluado
   qualification    String?     @db.Char(10)
   assigned_date    DateTime?   @default(now())
   completed_date   DateTime?
