@@ -263,6 +263,7 @@ model Task {
   course        Course?   @relation(fields: [course_id], references: [id])
   course_id     Int?
   quarter          String?
+  type   Int?  @default(0) // 0: Para entregar, 1: Solo evaluacion
   status           Int? // 0: Eliminado, 1: Activo
   create_date DateTime? @default(now())
   last_update DateTime?
