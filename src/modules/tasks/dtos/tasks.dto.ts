@@ -14,6 +14,8 @@ export const createTaskSchema = z.object({
   professor_id: z.number().int().positive("El ID del profesor es requerido"),
   subject_id: z.number().int().positive("El ID de la materia es requerido"),
   course_id: z.number().int().positive("El ID del curso es requerido"),
+  type: z.number().int().min(0).max(1).optional()
+    .describe("Tipo de tarea (0: Para entregar, 1: Solo evaluacion)"),
   quarter: z.string().max(10).optional(),
   start_date: z.coerce.date().optional(),
   end_date: z.coerce.date().optional(),
@@ -75,6 +77,7 @@ export class TaskResponseDto {
     public readonly last_update: Date,
     public readonly start_date: Date,
     public readonly end_date: Date,
+    public readonly type: number,
     public readonly status: number,
     public readonly delete_at: Date | null,
     public readonly assignments: TaskAssignmentResponseDto[]
@@ -97,11 +100,10 @@ export class TaskResponseDto {
       entity.last_update,
       entity.start_date,
       entity.end_date,
+      entity.type,
       entity.status,
       entity.delete_at,
-      entity.assignments?.map(assignment =>
-        TaskAssignmentResponseDto.fromEntity(assignment)
-      ) || []
+      entity.assignments?.map((assignment: any) => TaskAssignmentResponseDto.fromEntity(assignment)) || []
     );
   }
 }

@@ -39,6 +39,7 @@ export class TasksService {
                     end_date: task.end_date,
                     create_date: new Date(),
                     last_update: new Date(),
+                    type: task.type,
                     status: 1,
                     dimension: {
                         connect: { id: task.dimension_id }
