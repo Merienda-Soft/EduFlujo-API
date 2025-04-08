@@ -133,6 +133,38 @@ export class TasksController {
         }
     }
 
+    async getTaskByIdAndStudentId(req: Request, res: Response) {
+        try {
+            const { taskId, studentId } = req.params;
+            
+            if (!taskId || !studentId) {
+                return res.status(400).json({
+                    ok: false,
+                    error: 'Se requieren el ID de la tarea y el ID del estudiante'
+                });
+            }
+
+            const result = await this.service.getTaskByIdAndStudentId(
+                Number(taskId),
+                Number(studentId)
+            );
+
+            if (!result) {
+                return res.status(404).json({
+                    ok: false,
+                    error: 'No se encontró la tarea o el estudiante no tiene acceso a ella'
+                });
+            }
+
+            res.status(200).json({
+                ok: true,
+                data: result
+            });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
     private handleError(res: Response, error: any) {
         console.error(error);
         res.status(500).json({ error: 'Error interno del servidor', "ok": false });

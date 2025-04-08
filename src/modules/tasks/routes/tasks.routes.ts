@@ -10,6 +10,7 @@ export const tasksRouter = (() => {
     router.get('/', tController.getAll.bind(tController));
     router.get('/:id', tController.getById.bind(tController));
     router.get('/:id/assignments', tController.getTaskByIdWithAssignments.bind(tController));
+    router.get('/:taskId/student/:studentId', tController.getTaskByIdAndStudentId.bind(tController));
     router.put('/:id', tController.update.bind(tController));
     router.post('/:id', tController.delete.bind(tController));
 

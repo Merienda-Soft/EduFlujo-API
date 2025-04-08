@@ -192,6 +192,7 @@ export class TasksService {
         return await this.db.task.findMany({
             where: {
                 status: 1,
+                type: 0,
                 course_id: courseId,
                 subject_id: subjectId,
                 management_id: managementId,
@@ -214,6 +215,23 @@ export class TasksService {
                         person: true
                     }
                 }
+            }
+        });
+    }
+
+    //get task by task id and student id
+    async getTaskByIdAndStudentId(taskId: number, studentId: number) {
+        return await this.db.task.findUnique({
+            where: {
+                id: taskId,
+                status: 1
+            },
+            include: {
+                assignments: {
+                    where: {
+                        student_id: studentId
+                    }
+                },
             }
         });
     }
