@@ -1,0 +1,9 @@
+{
+    "courseId": 1,
+    "updates": [
+      { "oldProfessorId": 1, "newProfessorId": 4, "subjectId": 5 },
+      { "oldProfessorId": 1, "newProfessorId": 4, "subjectId": 5 },
+      { "oldProfessorId": 2, "newProfessorId": 7, "subjectId": 2 }
+    ],
+    "value": 0 
+}
