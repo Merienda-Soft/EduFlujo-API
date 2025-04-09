@@ -264,6 +264,7 @@ model Task {
   course        Course?   @relation(fields: [course_id], references: [id])
   course_id     Int?
   quarter          String?
+  type   Int?  @default(0) // 0: Para entregar, 1: Solo evaluacion
   status           Int? // 0: Eliminado, 1: Activo
   create_date DateTime? @default(now())
   last_update DateTime?
@@ -282,6 +283,9 @@ model TaskAssignment {
   qualification    String?     @db.Char(10)
   assigned_date    DateTime?   @default(now())
   completed_date   DateTime?
+  files            Json?       // Array de archivos con nombre y URL
+  submitted_at     DateTime?   @default(now())
+  last_update      DateTime?
 
   @@id([task_id, student_id])
 }

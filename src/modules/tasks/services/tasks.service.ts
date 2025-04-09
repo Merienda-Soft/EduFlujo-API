@@ -39,6 +39,7 @@ export class TasksService {
                     end_date: task.end_date,
                     create_date: new Date(),
                     last_update: new Date(),
+                    type: task.type,
                     status: 1,
                     dimension: {
                         connect: { id: task.dimension_id }
@@ -173,7 +174,7 @@ export class TasksService {
                     },
                     data: {
                         qualification: student.qualification,
-                        completed_date: new Date()
+                        status: 2
                     }
                 })
             );
@@ -191,6 +192,7 @@ export class TasksService {
         return await this.db.task.findMany({
             where: {
                 status: 1,
+                type: 0,
                 course_id: courseId,
                 subject_id: subjectId,
                 management_id: managementId,
@@ -217,6 +219,23 @@ export class TasksService {
         });
     }
 
+    //get task by task id and student id
+    async getTaskByIdAndStudentId(taskId: number, studentId: number) {
+        return await this.db.task.findUnique({
+            where: {
+                id: taskId,
+                status: 1
+            },
+            include: {
+                assignments: {
+                    where: {
+                        student_id: studentId
+                    }
+                },
+            }
+        });
+    }
+
     async getTasksByProfessorCourseSubjectManagement(professorId: number, courseId: number, subjectId: number, managementId: number) {
         return await this.db.task.findMany({
             where: {
@@ -231,6 +250,104 @@ export class TasksService {
                 subject: true,
                 dimension: true
             }
+        });
+    }
+
+    async submitTaskFiles(taskId: number, studentId: number, files: { name: string; url: string }[]) {
+        return await this.db.$transaction(async (tx) => {
+            // Verificar que la tarea existe y está activa
+            const task = await tx.task.findUnique({
+                where: {
+                    id: taskId,
+                    status: 1
+                }
+            });
+
+            if (!task) {
+                throw new Error('Tarea no encontrada o inactiva');
+            }
+
+            // Verificar que el estudiante tiene asignada la tarea
+            const assignment = await tx.taskAssignment.findUnique({
+                where: {
+                    task_id_student_id: {
+                        task_id: taskId,
+                        student_id: studentId
+                    }
+                }
+            });
+
+            if (!assignment) {
+                throw new Error('El estudiante no tiene asignada esta tarea');
+            }
+
+            // Actualizar el assignment con los archivos y marcar como entregado
+            const updatedAssignment = await tx.taskAssignment.update({
+                where: {
+                    task_id_student_id: {
+                        task_id: taskId,
+                        student_id: studentId
+                    }
+                },
+                data: {
+                    files: files,
+                    status: 1,
+                    submitted_at: new Date(),
+                    last_update: new Date(),
+                    completed_date: new Date()
+                }
+            });
+
+            return updatedAssignment;
+        });
+    }
+
+    async cancelSubmitTaskFiles(taskId: number, studentId: number) {
+        return await this.db.$transaction(async (tx) => {
+            // Verificar que la tarea existe y está activa
+            const task = await tx.task.findUnique({
+                where: {
+                    id: taskId,
+                    status: 1
+                }
+            });
+
+            if (!task) {
+                throw new Error('Tarea no encontrada o inactiva');
+            }
+
+            // Verificar que el estudiante tiene asignada la tarea
+            const assignment = await tx.taskAssignment.findUnique({
+                where: {
+                    task_id_student_id: {
+                        task_id: taskId,
+                        student_id: studentId
+                    }
+                }
+            });
+
+            if (!assignment) {
+                throw new Error('El estudiante no tiene asignada esta tarea');
+            }
+
+            // Revertir el estado de la entrega
+            const updatedAssignment = await tx.taskAssignment.update({
+                where: {
+                    task_id_student_id: {
+                        task_id: taskId,
+                        student_id: studentId
+                    }
+                },
+                data: {
+                    files: null,
+                    status: 0, // Cambiar el estado a no entregado
+                    submitted_at: null,
+                    last_update: new Date(),
+                    completed_date: null
+                }
+            });
+
+            return updatedAssignment;
         });
     }
 }
