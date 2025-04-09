@@ -12,7 +12,7 @@ export const tasksRouter = (() => {
     router.get('/:id/assignments', tController.getTaskByIdWithAssignments.bind(tController));
     router.get('/:taskId/student/:studentId', tController.getTaskByIdAndStudentId.bind(tController));
     router.put('/:id', tController.update.bind(tController));
-    router.post('/:id', tController.delete.bind(tController));
+    router.post('/delete/:id', tController.delete.bind(tController));
 
     // Rutas para calificaciones
     router.post('/:taskId/grade', tController.gradeTask.bind(tController));
@@ -20,6 +20,12 @@ export const tasksRouter = (() => {
     // Rutas para filtros específicos
     router.get('/student/:studentId/course/:courseId/subject/:subjectId/management/:managementId', tController.getTasksByStudent.bind(tController));
     router.get('/professor/:professorId/course/:courseId/subject/:subjectId/management/:managementId', tController.getTasksByProfessorCourseSubjectManagement.bind(tController));
+
+    // Subir archivos de tarea
+    router.post('/submit', tController.submitTaskFiles.bind(tController));
+
+    // Cancelar entrega de archivos de tarea
+    router.post('/cancel-submit', tController.cancelSubmitTaskFiles.bind(tController));
 
     return router;
 })();

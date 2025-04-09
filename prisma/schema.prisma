@@ -282,6 +282,9 @@ model TaskAssignment {
   qualification    String?     @db.Char(10)
   assigned_date    DateTime?   @default(now())
   completed_date   DateTime?
+  files            Json?       // Array de archivos con nombre y URL
+  submitted_at     DateTime?   @default(now())
+  last_update      DateTime?
 
   @@id([task_id, student_id])
 }

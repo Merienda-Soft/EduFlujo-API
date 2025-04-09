@@ -165,6 +165,57 @@ export class TasksController {
         }
     }
 
+    async submitTaskFiles(req: Request, res: Response) {
+        try {
+            const { taskId, studentId, files } = req.body;
+
+            if (!taskId || !studentId || !files || !Array.isArray(files)) {
+                return res.status(400).json({
+                    ok: false,
+                    error: 'Se requieren taskId, studentId y un array de archivos'
+                });
+            }
+
+            const result = await this.service.submitTaskFiles(
+                Number(taskId),
+                Number(studentId),
+                files
+            );
+
+            res.status(201).json({
+                ok: true,
+                data: result
+            });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
+    async cancelSubmitTaskFiles(req: Request, res: Response) {
+        try {
+            const { taskId, studentId } = req.body;
+
+            if (!taskId || !studentId) {
+                return res.status(400).json({
+                    ok: false,
+                    error: 'Se requieren taskId y studentId'
+                });
+            }
+
+            const result = await this.service.cancelSubmitTaskFiles(
+                Number(taskId),
+                Number(studentId)
+            );
+
+            res.status(200).json({
+                ok: true,
+                data: result
+            });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
     private handleError(res: Response, error: any) {
         console.error(error);
         res.status(500).json({ error: 'Error interno del servidor', "ok": false });
