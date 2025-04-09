@@ -42,12 +42,13 @@ model Attendance {
 }
 
 model AttendanceRecord {
-  id              Int       @id @default(autoincrement()) @map("_id")
-  attendance         Attendance?   @relation(fields: [attendance_id], references: [id])
-  attendance_id      Int?
-  student         Student?   @relation(fields: [student_id], references: [id])
-  student_id      Int?
-  status_attendance      String?    @db.Char(10)   
+  attendance         Attendance   @relation(fields: [attendance_id], references: [id])
+  attendance_id      Int
+  student            Student      @relation(fields: [student_id], references: [id])
+  student_id         Int
+  status_attendance  String?      @db.Char(10)   
+
+  @@id([attendance_id, student_id])
 }
 
 model Category {
