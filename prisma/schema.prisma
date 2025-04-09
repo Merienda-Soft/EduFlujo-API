@@ -73,6 +73,7 @@ model Course {
   parallel    String?     @db.Char(10)
   course      String?     
   last_update DateTime?
+  status      Int?
   degree      Degree?     @relation(fields: [degree_id], references: [id])
   degree_id   Int?
   management    Management? @relation(fields: [management_id], references: [id])
@@ -141,9 +142,9 @@ model Management {
   first_quarter_start  DateTime?
   first_quarter_end    DateTime?
   second_quarter_start DateTime?
-  second_quarter_end   String?   @db.Char(10)
-  third_quarter_start  String?   @db.Char(10)
-  third_quarter_end    String?   @db.Char(10)
+  second_quarter_end   DateTime? 
+  third_quarter_start  DateTime?   
+  third_quarter_end    DateTime? 
   courses         Course[]
   attendances         Attendance[]
   tasks     Task[]

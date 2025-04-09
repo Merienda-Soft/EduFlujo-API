@@ -1,89 +1,90 @@
 import Database from '../../../shared/database/connection';
+import { CreateManagementDto } from '../dtos/management.dto';
 
 export class EnvironmentService {
-  private prisma = Database.getInstance();
+  async CreateEnvironment(
+    managementData: CreateManagementDto, 
+    gradeCourseData: 
+    { 
+      grade: number; 
+      courseCount: number; 
+      parallels: string[] 
+    }[], 
+    subjectIds: number[] 
+  ) {
+    const db = Database.getInstance();
 
-  async createAcademicYearWithCourses(transactionData: {
-    managementData: {
-      year: number;
-      start_date: string;
-      end_date: string;
-      status?: number;
-      first_quarter_start?: string;
-      first_quarter_end?: string;
-      second_quarter_start?: string;
-      second_quarter_end?: string;
-      third_quarter_start?: string;
-      third_quarter_end?: string;
-    };
-    courses: Array<{
-      course_name: string;
-      parallel: string;
-      degree_id: number;
-      status?: number;
-    }>;
-  }) {
-    return this.prisma.$transaction(async (tx) => {
-      //Crear la gestión académica
-      const management = await tx.management.create({
-        data: {
-          management: transactionData.managementData.year,
-          status: transactionData.managementData.status || 1,
-          start_date: new Date(transactionData.managementData.start_date),
-          end_date: new Date(transactionData.managementData.end_date),
-          first_quarter_start: transactionData.managementData.first_quarter_start 
-            ? new Date(transactionData.managementData.first_quarter_start) 
-            : null,
-          first_quarter_end: transactionData.managementData.first_quarter_end
-            ? new Date(transactionData.managementData.first_quarter_end)
-            : null,
-          second_quarter_start: transactionData.managementData.second_quarter_start
-            ? new Date(transactionData.managementData.second_quarter_start)
-            : null,
-          second_quarter_end: transactionData.managementData.second_quarter_end || null,
-          third_quarter_start: transactionData.managementData.third_quarter_start || null,
-          third_quarter_end: transactionData.managementData.third_quarter_end || null
-        }
-      });
+    // Management DTO
+    return await db.$transaction(async (transaction) => {
+      // Create the management
+      const management = await this.createManagement(transaction, managementData);
 
-      const environmentCreations = await Promise.all(
-        transactionData.courses.map(async (courseData) => {
-          // Buscar o crear el curso
-          let course = await tx.course.findFirst({
-            where: {
-              course: courseData.course_name,
-              parallel: courseData.parallel,
-              degree_id: courseData.degree_id
-            }
-          });
+      // Create courses and curriculums
+      await this.createCoursesAndCurriculums(transaction, management.id, gradeCourseData, subjectIds);
 
-          if (!course) {
-            course = await tx.course.create({
-              data: {
-                course: courseData.course_name,
-                parallel: courseData.parallel,
-                degree_id: courseData.degree_id,
-                last_update: new Date()
-              }
-            });
-          }
-
-          //Environment (curso-gestión)
-          return tx.environment.create({
-            data: {
-              management_id: management.id,
-              course_id: course.id,
-              status: courseData.status || 1
-            }
-          });
-        })
-      );
-
-      return {
-        management,
-        environments: environmentCreations,
-        totalCourses: environmentCreations.length
-      };
+      return management; 
     });
+  }
+
+  private async createManagement(transaction: any, managementData: CreateManagementDto) {
+    return await transaction.management.create({
+      data: {
+        ...managementData,
+        status: managementData.status ?? 1, // Default status to 1 if not provided
+      },
+    });
+  }
+
+  private async createCoursesAndCurriculums(
+    transaction: any,
+    managementId: number,
+    gradeCourseData: { grade: number; courseCount: number; parallels: string[] }[],
+    subjectIds: number[]
+  ) {
+    for (const gradeData of gradeCourseData) {
+      const { grade, courseCount, parallels } = gradeData;
+
+      if (courseCount !== parallels.length) {
+        throw new Error(
+          `Mismatch between course count (${courseCount}) and parallels (${parallels.length}) for grade ${grade}`
+        );
+      }
+
+      for (let i = 0; i < courseCount; i++) {
+        const course = await this.createCourse(transaction, grade, parallels[i], managementId);
+
+        // Create curriculums for each subject in the course
+        await this.createCurriculums(transaction, course.id, subjectIds, managementId);
+      }
+    }
+  }
+
+  private async createCourse(transaction: any, grade: number, parallel: string, managementId: number) {
+    const courseDescription = `${grade}° ${parallel}`;
+    return await transaction.course.create({
+      data: {
+        course: courseDescription,
+        parallel: parallel,
+        degree_id: grade,
+        management_id: managementId,
+      },
+    });
+  }
+
+  private async createCurriculums(
+    transaction: any,
+    courseId: number,
+    subjectIds: number[],
+    managementId: number
+  ) {
+    for (const subjectId of subjectIds) {
+      await transaction.curriculum.create({
+        data: {
+          course_id: courseId,
+          subject_id: subjectId,
+          management_id: managementId,
+        },
+      });
+    }
   }
 }

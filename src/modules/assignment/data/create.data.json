@@ -1,0 +1,13 @@
+{
+    "courseId": 1,
+    "generalAssignments": [
+      { "professorId": 101, "subjectId": 201 },
+      { "professorId": 101, "subjectId": 202 },
+      { "professorId": 101, "subjectId": 203 }
+    ],
+    "technicalAssignments": [
+      { "professorId": 102, "subjectId": 204 },
+      { "professorId": 103, "subjectId": 205 },
+      { "professorId": 104, "subjectId": 206 }
+    ]
+}

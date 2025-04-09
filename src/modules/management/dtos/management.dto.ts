@@ -9,9 +9,9 @@ export const createManagementSchema = z.object({
   first_quarter_start: z.coerce.date().optional(),
   first_quarter_end: z.coerce.date().optional(),
   second_quarter_start: z.coerce.date().optional(),
-  second_quarter_end: z.string().length(10, "Debe tener 10 caracteres").optional(),
-  third_quarter_start: z.string().length(10, "Debe tener 10 caracteres").optional(),
-  third_quarter_end: z.string().length(10, "Debe tener 10 caracteres").optional()
+  second_quarter_end: z.coerce.date().optional(),
+  third_quarter_start: z.coerce.date().optional(),
+  third_quarter_end: z.coerce.date().optional()
 }).refine(data => {
   if (data.start_date && data.end_date) {
     return data.end_date > data.start_date;
@@ -35,9 +35,9 @@ export class ManagementResponseDto {
     public readonly first_quarter_start?: Date,
     public readonly first_quarter_end?: Date,
     public readonly second_quarter_start?: Date,
-    public readonly second_quarter_end?: string,
-    public readonly third_quarter_start?: string,
-    public readonly third_quarter_end?: string
+    public readonly second_quarter_end?: Date,
+    public readonly third_quarter_start?: Date,
+    public readonly third_quarter_end?: Date
   ) {}
 
   static fromEntity(entity: any): ManagementResponseDto {

@@ -1,0 +1,46 @@
+{
+    "managementData": {
+      "management": 2025,
+      "start_date": "2025-01-01T00:00:00.000Z",
+      "end_date": "2025-12-31T23:59:59.999Z",
+      "first_quarter_start": "2025-01-01T00:00:00.000Z",
+      "first_quarter_end": "2025-03-31T23:59:59.999Z",
+      "second_quarter_start": "2025-04-01T00:00:00.000Z",
+      "second_quarter_end": "2025-06-30T23:59:59.999Z",
+      "third_quarter_start": "2025-07-01T00:00:00.000Z",
+      "third_quarter_end": "2025-09-30T23:59:59.999Z"
+    },
+    "gradeCourseData": [
+        {
+            "grade": 1,
+            "courseCount": 2,
+            "parallels": ["A", "B"]
+        },
+        {
+            "grade": 2,
+            "courseCount": 3,
+            "parallels": ["A", "B", "C"]
+        },
+        {
+            "grade": 3,
+            "courseCount": 4,
+            "parallels": ["A", "B", "C", "D"]
+        },
+        {
+            "grade": 4,
+            "courseCount": 5,
+            "parallels": ["A", "B", "C", "D", "E"]
+        },
+        {
+            "grade": 5,
+            "courseCount": 6,
+            "parallels": ["A", "B", "C", "D"]
+        },
+        {
+            "grade": 6,
+            "courseCount": 4,
+            "parallels": ["A", "B", "C", "D"]
+        }
+    ],
+    "subjectIds": [1, 2, 3, 4]
+  }
