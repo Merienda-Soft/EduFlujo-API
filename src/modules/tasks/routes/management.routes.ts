@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ManagementController } from '../controllers/management.controller';
 
-export const managementRouter = (() => {
+export const managementRouters = (() => {
     const router = Router();
     const managementController = new ManagementController();
 
