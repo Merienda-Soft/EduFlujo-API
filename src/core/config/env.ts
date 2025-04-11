@@ -5,6 +5,7 @@ dotenv.config();
 export const env = {
   PORT: process.env.PORT || 3000,
   NODE_ENV: process.env.NODE_ENV || 'development',
+  PDF_READER: process.env.PDF_READER || '',
   DATABASE_URL: process.env.DATABASE_URL || '',
   AUTH0_DOMAIN: process.env.AUTH0_DOMAIN || '',
   CLIENT_ID: process.env.CLIENT_ID || '',

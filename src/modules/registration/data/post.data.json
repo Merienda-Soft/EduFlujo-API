@@ -1,0 +1,32 @@
+{
+    "dataAssignment": [
+      {
+        "rude": "809800232016027",
+        "ci": "",
+        "name": "TORREZ CAMILA VICTORIA",
+        "gender": "F",
+        "datebirth": "2012-05-15",
+        "pais": "BOLIVIA",
+        "departamento": "Cochabamba",
+        "provincia": "CERCADO",
+        "localidad": "COCHABAMBA",
+        "matricula": "EFECTIVO"
+      },
+      {
+        "rude": "809800232016028",
+        "ci": "12345678",
+        "name": "PEREZ JUAN CARLOS",
+        "gender": "M",
+        "datebirth": "2011-03-10",
+        "pais": "BOLIVIA",
+        "departamento": "La Paz",
+        "provincia": "MURILLO",
+        "localidad": "LA PAZ",
+        "matricula": "EFECTIVO"
+      }
+    ],
+    "registrationData": {
+      "courseId": 2,
+      "managementId": 1
+    }
+  }

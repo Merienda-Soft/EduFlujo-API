@@ -97,9 +97,9 @@ model Degree {
 model Departament {
   id          Int        @id @default(autoincrement()) @map("_id")
   departament String?    
-  province    Province?  @relation(fields: [province_id], references: [id])
-  province_id Int?
-  persons     Person[]
+  country    Country?  @relation(fields: [country_id], references: [id])
+  country_id Int?
+  provinces     Province[]
 }
 
 model Dimension {
@@ -164,9 +164,10 @@ model Person {
   ci               String?    
   birth_date       DateTime?
   email            String?    
+  temp_password    String?
   status           Int?
-  departament      Departament? @relation(fields: [departament_id], references: [id])
-  departament_id   Int?
+  town         Town?        @relation(fields: [town_id], references: [id])
+  town_id      Int?
   professor        Professor?
   student          Student?
   tutor            Tutor?
@@ -186,9 +187,9 @@ model Professor {
 model Province {
   id           Int          @id @default(autoincrement()) @map("_id")
   province     String?      
-  town         Town?        @relation(fields: [town_id], references: [id])
-  town_id      Int?
-  departaments Departament[]
+  departament         Departament?        @relation(fields: [departament_id], references: [id])
+  departament_id      Int?
+  towns   Town[]
 }
 
 model Registration {
@@ -293,7 +294,15 @@ model TaskAssignment {
 model Town {
   id      Int      @id @default(autoincrement()) @map("_id")
   town    String?  
-  provinces Province[]
+  province         Province?        @relation(fields: [province_id], references: [id])
+  province_id      Int?
+  persons   Person[]
+}
+
+model Country {
+  id      Int      @id @default(autoincrement()) @map("_id")
+  country    String?  
+  departaments   Departament[]
 }
 
 model Tutor {
