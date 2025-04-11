@@ -1,3 +1,3 @@
 import { tasksRouter } from './tasks.routes';
-import { managementRouter } from './management.routes';
-export { tasksRouter, managementRouter }; 
+import { managementRouters } from './management.routes';
+export { tasksRouter, managementRouters }; 
