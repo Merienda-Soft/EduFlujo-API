@@ -2,7 +2,7 @@ import { Router } from 'express';
 import managementRouter from './management/routes';
 import {tasksRouter, managementRouters} from './tasks/routes'; 
 import authRouter from './auth/routes';
-import {professorsRouter, tutorStudentRouter} from './professors/routes';
+import {professorsRouter, tutorStudentRouter, contentRouter} from './professors/routes';
 import { studentRouter, attendanceRouter } from './attendance/routes';
 import courseRouter from './course/routes';
 import assignmentRouter from './assignment/routes';
@@ -19,5 +19,6 @@ router.use('/students', studentRouter);
 router.use('/attendance', attendanceRouter);
 router.use('/course', tutorStudentRouter);
 router.use('/assignment', assignmentRouter);
+router.use('/content', contentRouter);
 
 export default router;
