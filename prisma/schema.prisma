@@ -51,22 +51,17 @@ model AttendanceRecord {
   @@id([attendance_id, student_id])
 }
 
-model Category {
-  id       Int      @id @default(autoincrement()) @map("_id")
-  category String?  
-  contents Content[]
-}
-
 model Content {
   id            Int       @id @default(autoincrement()) @map("_id")
   course   Course? @relation(fields: [course_id], references: [id])
   course_id Int?
   subject       Subject?   @relation(fields: [subject_id], references: [id])
   subject_id    Int?
-  category      Category?  @relation(fields: [category_id], references: [id])
-  category_id   Int?
   management      Management? @relation(fields: [management_id], references: [id])
-  management_id   Int? 
+  management_id   Int?
+  file          Json?     // Array de archivos con nombre y URL
+  submitted_at   DateTime?   @default(now())
+  last_update    DateTime?   @default(now())
 }
 
 model Course {
