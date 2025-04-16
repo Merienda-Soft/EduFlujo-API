@@ -20,6 +20,17 @@ export class ProfessorController {
         }
     }
 
+    async createProfessor(req: Request, res: Response) {
+        try {
+            const professorData = req.body;
+
+            const professor = await this.service.createProfessor(professorData);
+            res.status(201).json({ professor, success: true });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
     private handleError(res: Response, error: any) {
         console.error(error);
         res.status(500).json({ error: 'Error interno del servidor', success: false });

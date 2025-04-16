@@ -4,8 +4,18 @@ export class CourseService {
   async getAllCourses() {
     return await Database.getInstance().course.findMany({
       include: {
-        degree: true, 
+        degree: true,
         management: true,
+        curriculums: {
+          include: {
+            subject: {
+              select: {
+                id: true,
+                subject: true, 
+              },
+            },
+          },
+        },
       },
     });
   }

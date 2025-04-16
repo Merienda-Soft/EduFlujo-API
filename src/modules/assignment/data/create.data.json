@@ -1,13 +1,13 @@
 {
     "courseId": 1,
     "generalAssignments": [
-      { "professorId": 101, "subjectId": 201 },
-      { "professorId": 101, "subjectId": 202 },
-      { "professorId": 101, "subjectId": 203 }
+      { "professorId": 101, "subjectId": 1 },
+      { "professorId": 101, "subjectId": 2 },
+      { "professorId": 101, "subjectId": 2 }
     ],
     "technicalAssignments": [
-      { "professorId": 102, "subjectId": 204 },
-      { "professorId": 103, "subjectId": 205 },
-      { "professorId": 104, "subjectId": 206 }
+      { "professorId": 102, "subjectId": 5 },
+      { "professorId": 103, "subjectId": 6 },
+      { "professorId": 104, "subjectId": 7 }
     ]
 }

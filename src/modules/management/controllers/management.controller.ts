@@ -13,6 +13,7 @@ export class ManagementController {
     try {
       const result = await this.managementService.getAllManagements();
       const simplifiedResults = result.map(item => ({
+        id: item.id,
         management: item.management,
         status: item.status
       }));
@@ -22,6 +23,35 @@ export class ManagementController {
       this.handleError(res, error);
     }
   }
+
+  async getActive(req: Request, res: Response) {
+    try {
+      const result = await this.managementService.getActiveManagements();
+      const simplifiedResults = result.map(item => ({
+        id: item.id,
+        management: item.management,
+      }));
+      
+      res.status(200).json(simplifiedResults);
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
+  async getDegree(req: Request, res: Response) {
+    try {
+      const result = await this.managementService.getAllDegree();
+      const simplifiedResults = result.map(item => ({
+        id: item.id,
+        degree: item.degree,
+      }));
+      
+      res.status(200).json(simplifiedResults);
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
 
   async getById(req: Request, res: Response) {
     try {

@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const env = {
-  PORT: process.env.PORT || 3000,
+  PORT: process.env.PORT || 3001,
   NODE_ENV: process.env.NODE_ENV || 'development',
   PDF_READER: process.env.PDF_READER || '',
   DATABASE_URL: process.env.DATABASE_URL || '',

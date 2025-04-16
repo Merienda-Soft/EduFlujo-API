@@ -7,6 +7,9 @@ export const tutorStudentRouter = (() => {
 
     // Ruta para obtener cursos y materias (managementId como query parameter)
     router.get('/:userId/:role/courses-subjects', controller.getCoursesAndSubjects.bind(controller));
+    router.get('/:value', controller.getTutorsByStatus.bind(controller));
+    router.post('/request', controller.TutorshipRequest.bind(controller));
+    router.post('/', controller.createTutor.bind(controller));
 
     return router;
 })();

@@ -1,0 +1,6 @@
+{
+  "tutorId": 1,
+  "studentIds": [101, 102],
+  "relacion": "padre",
+  "value": 1
+}

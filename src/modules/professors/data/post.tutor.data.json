@@ -1,0 +1,15 @@
+{
+    "name": "MARIA",
+    "lastname": "GONZALEZ",
+    "second_lastname": "PEREZ",
+    "gender": "F",
+    "ci": "98765432",
+    "birth_date": "1985-03-10",
+    "email": "maria.gonzalez@example.com",
+    "pais": "BOLIVIA",
+    "departamento": "La Paz",
+    "provincia": "MURILLO",
+    "localidad": "LA PAZ",
+    "url_imagefront": "https://example.com/imagefront.jpg",
+    "url_imageback": "https://example.com/imageback.jpg"
+  }

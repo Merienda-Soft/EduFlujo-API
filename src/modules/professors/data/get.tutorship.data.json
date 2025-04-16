@@ -1,0 +1,35 @@
+[
+    {
+      "id": 1,
+      "status": 1,
+      "person": {
+        "name": "JUAN",
+        "lastname": "PEREZ",
+        "second_lastname": "GARCIA",
+        "ci": "12345678",
+        "email": "juan.perez@example.com"
+      },
+      "students": [
+        {
+          "student": {
+            "person": {
+              "name": "MARIA",
+              "lastname": "LOPEZ",
+              "second_lastname": "HERNANDEZ",
+              "ci": "98765432"
+            }
+          }
+        },
+        {
+          "student": {
+            "person": {
+              "name": "CARLOS",
+              "lastname": "MARTINEZ",
+              "second_lastname": "RODRIGUEZ",
+              "ci": "87654321"
+            }
+          }
+        }
+      ]
+    }
+]

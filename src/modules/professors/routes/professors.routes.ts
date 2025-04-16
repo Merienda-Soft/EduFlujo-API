@@ -6,6 +6,7 @@ export const professorsRouter = (() => {
     const professorController = new ProfessorController();
     
     router.get('/:email', professorController.getProfessorByEmail.bind(professorController));
+    router.post('/', professorController.createProfessor.bind(professorController));
 
     return router;
 })();

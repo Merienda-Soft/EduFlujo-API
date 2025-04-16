@@ -1,0 +1,28 @@
+[
+    {
+      "registrationId": 1,
+      "data": {
+        "rude": "809800232016027",
+        "ci": "",
+        "name": "CAMILA VICTORIA",
+        "lastname": "TORREZ",
+        "second_lastname": "PADILLA",
+        "gender": "F",
+        "datebirth": "2012-05-15",
+        "matricula": "EFECTIVO"
+      }
+    },
+    {
+      "registrationId": 2,
+      "data": {
+        "rude": "809800232016028",
+        "ci": "12345678",
+        "name": "JUAN CARLOS",
+        "lastname": "PEREZ",
+        "second_lastname": "",
+        "gender": "M",
+        "datebirth": "2011-03-10",
+        "matricula": "EFECTIVO"
+      }
+    }
+  ]

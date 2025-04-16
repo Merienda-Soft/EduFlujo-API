@@ -310,6 +310,8 @@ model Tutor {
   id        Int       @id  
   status    Int?
   person    Person    @relation(fields: [id], references: [id])
+  url_imagefront String?
+  url_imageback  String?
   students  Tutorship[] 
 }
 

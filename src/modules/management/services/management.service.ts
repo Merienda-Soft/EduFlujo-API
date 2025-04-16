@@ -5,6 +5,18 @@ export class ManagementService {
     return await Database.getInstance().management.findMany();
   }
 
+  async getActiveManagements() {
+    return await Database.getInstance().management.findMany({
+      where: {
+        status: 1,
+      },
+    });
+  }
+
+  async getAllDegree() {
+    return await Database.getInstance().degree.findMany();
+  }
+
   async getManagementById(id: number) {
     return await Database.getInstance().management.findUnique({
       where: { id: id },
