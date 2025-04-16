@@ -1,0 +1,7 @@
+{
+    "course": "Primero A",
+    "parallel": "A",
+    "degree_id": 1,
+    "management_id": 1,
+    "subject_ids": [101, 102, 103]
+}
