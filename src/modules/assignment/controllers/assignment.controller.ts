@@ -16,12 +16,13 @@ export class AssignmentController {
 
   async createAssignments(req: Request, res: Response) {
     try {
-      const { courseId, generalAssignments, technicalAssignments } = req.body;
-      const assignments = await this.assignmentService.createAssignments(
-        Number(courseId),
-        generalAssignments,
-        technicalAssignments
-      );
+      const assignmentsData = req.body; // array of { course_id, professor_id, subject_id }
+  
+      if (!Array.isArray(assignmentsData)) {
+        return res.status(400).json({ message: 'Invalid request format. Expected an array of assignments.' });
+      }
+  
+      const assignments = await this.assignmentService.createAssignments(assignmentsData);
       res.status(201).json(assignments);
     } catch (error) {
       this.handleError(res, error);
@@ -30,12 +31,13 @@ export class AssignmentController {
 
   async updateAssignments(req: Request, res: Response) {
     try {
-      const { courseId, oldProfessorId, newProfessorId, subjectId, value } = req.body;
-      const updatedAssignments = await this.assignmentService.updateAssignments(
-        Number(courseId),
-        [{ oldProfessorId, newProfessorId, subjectId }],
-        Number(value)
-      );
+      const updates = req.body; // array of { assignmentId, newProfessorId }
+      
+      if (!Array.isArray(updates)) {
+        return res.status(400).json({ message: 'Invalid request format. Expected an array of updates.' });
+      }
+  
+      const updatedAssignments = await this.assignmentService.updateAssignmentsById(updates);
       res.status(200).json(updatedAssignments);
     } catch (error) {
       this.handleError(res, error);

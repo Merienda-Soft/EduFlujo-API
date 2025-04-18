@@ -1,20 +1,5 @@
 [
-    {
-      "id": 1,
-      "subject": "Matematicas",
-      "professor": {
-        "id": 101,
-        "full_name": "Juan Perez"
-      },
-      "is_temporary": 0
-    },
-    {
-      "id": 2,
-      "subject": "Ciencias Naturales",
-      "professor": {
-        "id": 102,
-        "full_name": "Maria Lopez"
-      },
-      "is_temporary": 1
-    }
-  ]
+  { "subject_id": 101, "professor_id": 201 },
+  { "subject_id": 102, "professor_id": 202 },
+  { "subject_id": 103, "professor_id": 203 }
+]

@@ -3,6 +3,21 @@ import { ProfessorService } from '../services/professor.service';
 
 export class ProfessorController {
     private service = new ProfessorService();
+
+    async getAllProfessors(req: Request, res: Response) {
+        try {
+            const professors = await this.service.getAllProfessors();
+
+            if (!professors) {
+                res.status(404).json({ error: 'Profesor no encontrado', success: false });
+                return;
+            }
+
+            res.status(200).json({ professors, success: true });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
     
     async getProfessorByEmail(req: Request, res: Response) {
         try {

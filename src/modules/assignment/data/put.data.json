@@ -1,9 +1,14 @@
-{
-    "courseId": 1,
-    "updates": [
-      { "oldProfessorId": 1, "newProfessorId": 4, "subjectId": 5 },
-      { "oldProfessorId": 1, "newProfessorId": 4, "subjectId": 5 },
-      { "oldProfessorId": 2, "newProfessorId": 7, "subjectId": 2 }
-    ],
-    "value": 0 
-}
+[
+  {
+    "assignmentId": 1,
+    "newProfessorId": 101
+  },
+  {
+    "assignmentId": 2,
+    "newProfessorId": 102
+  },
+  {
+    "assignmentId": 3,
+    "newProfessorId": 103
+  }
+]

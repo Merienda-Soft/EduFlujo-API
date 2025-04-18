@@ -22,6 +22,24 @@ export class ProfessorService {
         });
     }
 
+    async getAllProfessors() {
+      return await this.db.professor.findMany({
+        include: {
+          person: {
+            select: {
+              name: true,
+              lastname: true,
+              second_lastname: true,
+              gender: true,
+              ci: true,
+              birth_date: true,
+              email: true,
+            },
+          },
+        },
+      });
+    }
+    
     async createProfessor(professorData: {
         name: string;
         lastname: string;
@@ -36,6 +54,7 @@ export class ProfessorService {
         localidad: string;
         is_tecnical: number; 
         subjects: string;
+        temporary_password: string;
       }) {
         return await this.db.$transaction(async (transaction) => {
           const countryName = professorData.pais?.trim().toUpperCase() || 'NINGUNO';
@@ -125,6 +144,7 @@ export class ProfessorService {
               email: professorData.email,
               status: 1,
               town_id: town.id, 
+              temp_password: professorData.temporary_password,
             },
           });
 
