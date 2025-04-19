@@ -19,6 +19,7 @@ export class RegistrationController {
   async updateStudent(req: Request, res: Response) {
     try {
       const { registrationUpdates } = req.body;
+      console.log('RegistrationUpdates Controller', registrationUpdates);
 
       const result = await this.registrationService.updateStudent(registrationUpdates);
 
@@ -27,6 +28,7 @@ export class RegistrationController {
       this.handleError(res, error);
     }
   }
+
   async getStudentsByCourseId(req: Request, res: Response) {
     try {
       const { courseId } = req.params;

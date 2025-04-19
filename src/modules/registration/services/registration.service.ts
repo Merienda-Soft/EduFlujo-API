@@ -9,7 +9,8 @@ export class RegistrationService {
     const authService = new AuthService(); 
     const { courseId, managementId } = registrationData;
 
-    return await db.$transaction(async (transaction) => {
+    return await db.$transaction(
+      async (transaction) => {
       const registeredStudents = [];
       const usersToCreate = []; 
       for (const student of dataAssignment) {
@@ -103,7 +104,7 @@ export class RegistrationService {
           data: {
             id: person.id,
             matricula: student.matricula || null,
-            rude: student.rude ? parseInt(student.rude) : null,
+            rude: student.rude,
           },
         });
 
@@ -136,35 +137,125 @@ export class RegistrationService {
         registeredStudents,
         auth0Result,
       };
+    }, 
+    {
+      timeout: 40000, 
+      maxWait: 50000, 
     });
   }
 
   async updateStudent(registrationUpdates: { registrationId: number; data: any }[]) {
+    console.log('registrationUpdates', registrationUpdates);
     const db = Database.getInstance();
-      return await db.$transaction(async (transaction) => {
+  
+    return await db.$transaction(async (transaction) => {
       const updatedRecords = [];
-      
+  
       for (const { registrationId, data } of registrationUpdates) {
-        // GET the registration record
+        // Obtener el registro de inscripción
         const registration = await transaction.registration.findUnique({
           where: { id: registrationId },
           include: {
             student: {
               include: {
-              person: true,
+                person: {
+                  include: {
+                    town: {
+                      include: {
+                        province: {
+                          include: {
+                            departament: {
+                              include: {
+                                country: true,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
         });
-      
+  
         if (!registration) {
           throw new Error(`No se encontró el registro con ID ${registrationId}`);
         }
-      
+  
         const { student } = registration;
         const { person } = student;
-      
-        // Update person-student data
+  
+        // Actualizar o asociar datos de ubicación
+        const countryName = data.pais?.trim().toUpperCase() || 'NINGUNO';
+        const departmentName = data.departamento?.trim().toUpperCase() || 'NINGUNO';
+        const provinceName = data.provincia?.trim().toUpperCase() || 'NINGUNO';
+        const townName = data.localidad?.trim().toUpperCase() || 'NINGUNO';
+  
+        // Actualizar o asociar país
+        let country = await transaction.country.findFirst({
+          where: { country: countryName },
+        });
+  
+        if (!country) {
+          country = await transaction.country.create({
+            data: { country: countryName },
+          });
+        }
+  
+        // Actualizar o asociar departamento
+        let department = await transaction.departament.findFirst({
+          where: {
+            departament: departmentName,
+            country_id: country.id,
+          },
+        });
+  
+        if (!department) {
+          department = await transaction.departament.create({
+            data: {
+              departament: departmentName,
+              country_id: departmentName === 'NINGUNO' ? 1 : country.id,
+            },
+          });
+        }
+  
+        // Actualizar o asociar provincia
+        let province = await transaction.province.findFirst({
+          where: {
+            province: provinceName,
+            departament_id: department.id,
+          },
+        });
+  
+        if (!province) {
+          province = await transaction.province.create({
+            data: {
+              province: provinceName,
+              departament_id: provinceName === 'NINGUNO' ? 1 : department.id,
+            },
+          });
+        }
+  
+        // Actualizar o asociar localidad
+        let town = await transaction.town.findFirst({
+          where: {
+            town: townName,
+            province_id: province.id,
+          },
+        });
+  
+        if (!town) {
+          town = await transaction.town.create({
+            data: {
+              town: townName,
+              province_id: townName === 'NINGUNO' ? 1 : province.id,
+            },
+          });
+        }
+  
+        // Actualizar datos de la persona
         await transaction.person.update({
           where: { id: person.id },
           data: {
@@ -174,22 +265,25 @@ export class RegistrationService {
             gender: data.gender,
             ci: data.ci || null,
             birth_date: data.datebirth ? new Date(data.datebirth) : null,
+            town_id: town.id, // Asociar la nueva localidad
           },
         });
-
+  
+        // Actualizar datos del estudiante
         await transaction.student.update({
           where: { id: student.id },
           data: {
             matricula: data.matricula || null,
-            rude: data.rude ? parseInt(data.rude) : null,
+            rude: data.rude ? data.rude : null,
           },
         });
-      
+  
         updatedRecords.push({
           registrationId,
           updated: true,
         });
       }
+  
       return updatedRecords;
     });
   }
@@ -202,7 +296,23 @@ export class RegistrationService {
       include: {
         student: {
           include: {
-            person: true, 
+            person: {
+              include: {
+                town: {
+                  include: {
+                    province: {
+                      include: {
+                        departament: {
+                          include: {
+                            country: true, 
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },

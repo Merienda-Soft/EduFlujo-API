@@ -6,9 +6,9 @@ export const registrationRouter = (() => {
   const controller = new RegistrationController();
 
   // Routes for registration
-  router.post('/register', controller.registerStudents.bind(controller));
-  router.put('/update', controller.updateStudent.bind(controller));
-  router.get('/students/course/:courseId', controller.getStudentsByCourseId.bind(controller));
+  router.post('/', controller.registerStudents.bind(controller));
+  router.put('/', controller.updateStudent.bind(controller));
+  router.get('/course/:courseId', controller.getStudentsByCourseId.bind(controller));
 
   return router;
 })();

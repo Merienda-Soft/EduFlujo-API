@@ -1,0 +1,41 @@
+[
+    {
+      "id": 1, 
+      "course_id": 101,
+      "student_id": 201,
+      "management_id": 301,
+      "student": {
+        "id": 201,
+        "matricula": "A12345",
+        "rude": 67890,
+        "person": {
+          "id": 401,
+          "name": "Juan",
+          "lastname": "Pérez",
+          "second_lastname": "Gómez",
+          "gender": "M",
+          "ci": "12345678",
+          "birth_date": "2005-06-15T00:00:00.000Z",
+          "email": "juan.perez@example.com",
+          "temp_password": "abc123",
+          "status": 1,
+          "town": {
+            "id": 501,
+            "town": "Ciudad A",
+            "province": {
+              "id": 601,
+              "province": "Provincia A",
+              "departament": {
+                "id": 701,
+                "departament": "Departamento A",
+                "country": {
+                  "id": 801,
+                  "country": "País A"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+]

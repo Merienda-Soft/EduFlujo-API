@@ -211,7 +211,7 @@ model Setting {
 model Student {
   id        Int       @id 
   matricula String?   
-  rude      Int?
+  rude      String?
   person    Person    @relation(fields: [id], references: [id])
   attendances AttendanceRecord[]
   registrations Registration[]

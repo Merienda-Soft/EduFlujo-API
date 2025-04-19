@@ -1,36 +1,38 @@
-[
+{
+  "registrationUpdates": [
     {
       "registrationId": 1,
       "data": {
-        "rude": "809800232016027",
-        "ci": "",
-        "name": "CAMILA VICTORIA",
-        "lastname": "TORREZ",
-        "second_lastname": "",
-        "gender": "F",
-        "datebirth": "2012-05-15",
-        "pais": "BOLIVIA",
-        "departamento": "Cochabamba",
-        "provincia": "CERCADO",
-        "localidad": "COCHABAMBA",
-        "matricula": "EFECTIVO"
+        "name": "Juan",
+        "lastname": "Pérez",
+        "second_lastname": "Gómez",
+        "gender": "M",
+        "ci": "12345678",
+        "datebirth": "2005-06-15",
+        "matricula": "A12345",
+        "rude": "67890",
+        "pais": "Bolivia",
+        "departamento": "La Paz",
+        "provincia": "Murillo",
+        "localidad": "Ciudad La Paz"
       }
     },
     {
       "registrationId": 2,
       "data": {
-        "rude": "809800232016028",
-        "ci": "12345678",
-        "name": "JUAN CARLOS",
-        "lastname": "PEREZ",
-        "second_lastname": "HOLGIN",
-        "gender": "M",
-        "datebirth": "2011-03-10",
-        "pais": "BOLIVIA",
-        "departamento": "La Paz",
-        "provincia": "MURILLO",
-        "localidad": "LA PAZ",
-        "matricula": "EFECTIVO"
+        "name": "María",
+        "lastname": "López",
+        "second_lastname": "Martínez",
+        "gender": "F",
+        "ci": "87654321",
+        "datebirth": "2006-08-20",
+        "matricula": "B54321",
+        "rude": "98765",
+        "pais": "Argentina",
+        "departamento": "Buenos Aires",
+        "provincia": "Capital Federal",
+        "localidad": "Buenos Aires"
       }
     }
   ]
+}

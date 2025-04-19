@@ -5,13 +5,13 @@ const axios = require('axios');
 export class AuthService {
   private db = Database.getInstance();
 
-  // Datos comunes reutilizables para Auth0
   private auth0Config = {
     domain: `https://${env.AUTH0_DOMAIN}`,
     clientId: env.CLIENT_ID,
     clientSecret: env.CLIENT_SECRET,
     audience: env.AUDIENCE,
     connection: 'eduflujo',
+    studentRoleId: 'rol_2uyG1s1h8icn0Qjb'
   };
 
   async login(email: string, password: string) {
@@ -125,60 +125,71 @@ export class AuthService {
 
   async createStudentUsers(users: { email: string; password: string }[]) {
     try {
-      const managementToken = await this.getManagementToken(); // Obtener el token de gestión una vez
+      const managementToken = await this.getManagementToken();
       const createdUsers = [];
+      const BATCH_SIZE = 5; 
+      const DELAY_MS = 1000; 
   
-      for (const user of users) {
-        try {
-         //Create new user in Auth0
-          const response = await axios.post(
-            `${this.auth0Config.domain}/api/v2/users`,
-            {
-              email: user.email,
-              password: user.password,
-              connection: this.auth0Config.connection,
-              verify_email: true,
-              app_metadata: {
-                role: 'student',
-              },
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${managementToken}`,
-              },
+      // Procesar usuarios en lotes
+      for (let i = 0; i < users.length; i += BATCH_SIZE) {
+        const batch = users.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(async (user) => {
+            try {
+              // Crear usuario en Auth0
+              const response = await axios.post(
+                `${this.auth0Config.domain}/api/v2/users`,
+                {
+                  email: user.email,
+                  password: user.password,
+                  connection: this.auth0Config.connection,
+                  verify_email: true,
+                  app_metadata: { role: 'student' },
+                },
+                { headers: { Authorization: `Bearer ${managementToken}` } }
+              );
+  
+              const userId = response.data.user_id;
+  
+              // Asignar rol si está configurado
+              if (this.auth0Config.studentRoleId) {
+                await axios.post(
+                  `${this.auth0Config.domain}/api/v2/roles/${this.auth0Config.studentRoleId}/users`,
+                  { users: [userId] },
+                  { headers: { Authorization: `Bearer ${managementToken}` } }
+                );
+              }
+  
+              return {
+                email: user.email,
+                status: 'success',
+                user: response.data,
+              };
+            } catch (error) {
+              console.error(`Error al crear usuario ${user.email}:`, error.response?.data || error.message);
+              return {
+                email: user.email,
+                status: 'error',
+                error: error.response?.data?.message || 'Error al crear usuario',
+              };
             }
-          );
+          })
+        );
   
-          createdUsers.push({
-            email: user.email,
-            status: 'success',
-            user: response.data,
-          });
-        } catch (error) {
-          console.error(`Error al crear usuario ${user.email}:`, error.response?.data || error.message);
+        createdUsers.push(...batchResults);
   
-          createdUsers.push({
-            email: user.email,
-            status: 'error',
-            error: error.response?.data?.message || 'Error al crear usuario',
-          });
+        // Esperar antes del siguiente lote (excepto en la última iteración)
+        if (i + BATCH_SIZE < users.length) {
+          await new Promise(resolve => setTimeout(resolve, DELAY_MS));
         }
       }
   
-      return {
-        ok: true,
-        createdUsers,
-      };
+      return { ok: true, createdUsers };
     } catch (error) {
       console.error('Error al procesar la lista de usuarios:', error.response?.data || error.message);
-  
-      return {
-        ok: false,
-        error: 'Error interno del servidor',
-        status: 500,
-      };
+      return { ok: false, error: 'Error interno del servidor', status: 500 };
     }
-  }
+  } 
 
   private async getManagementToken() {
     try {
