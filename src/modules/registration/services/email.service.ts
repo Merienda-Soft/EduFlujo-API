@@ -7,6 +7,19 @@ export class emailService {
     return `${initials}${yearPart}${idPart}@uebhb.edu.bo`;
   }
 
+  generatePassword = () => {
+    const letter = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const number = "0123456789";
+    const char = "!@#$%^&*()_+[]{}|;:,.<>?";
+  
+    const letters = Array.from({ length: 5 }, () => letter.charAt(Math.floor(Math.random() * letter.length)));
+    const numbers = Array.from({ length: 4 }, () => number.charAt(Math.floor(Math.random() * number.length)));
+    const special = char.charAt(Math.floor(Math.random() * char.length));
+    const password = [...letters, ...numbers, special].sort(() => Math.random() - 0.5).join("");
+
+    return password;
+  };
+
   generateMemorablePassword(): string {
     const adjectives = ['Happy', 'Sunny', 'Brave', 'Gentle'];
     const nouns = ['Lion', 'River', 'Mountain', 'Star'];

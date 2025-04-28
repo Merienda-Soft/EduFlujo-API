@@ -1,6 +1,8 @@
 import { env } from '../../../core/config/env';
 import Database from '../../../shared/database/connection';
+import { emailService } from '../../registration/services/email.service';
 const axios = require('axios');
+const email_service = new emailService();
 
 export class AuthService {
   private db = Database.getInstance();
@@ -11,7 +13,8 @@ export class AuthService {
     clientSecret: env.CLIENT_SECRET,
     audience: env.AUDIENCE,
     connection: 'eduflujo',
-    studentRoleId: 'rol_2uyG1s1h8icn0Qjb'
+    studentRoleId: 'rol_2uyG1s1h8icn0Qjb',
+    tutorRoleId: 'rol_x5EOWJgcV0lCoVAi'
   };
 
   async login(email: string, password: string) {
@@ -190,6 +193,57 @@ export class AuthService {
       return { ok: false, error: 'Error interno del servidor', status: 500 };
     }
   } 
+
+  async createTutorUser(email: string) {
+    try {
+      const managementToken = await this.getManagementToken();
+      const password = email_service.generatePassword(); 
+      const response = await axios.post(
+        `${this.auth0Config.domain}/api/v2/users`,
+        {
+          email: email,
+          password: password,
+          connection: this.auth0Config.connection,
+          verify_email: true,
+          app_metadata: { role: 'tutor' },
+          user_metadata: {
+            temporaryPassword: password,
+          },
+        },
+        { headers: { Authorization: `Bearer ${managementToken}` } }
+      );
+
+      const userId = response.data.user_id;
+
+      if (this.auth0Config.tutorRoleId) {
+        await axios.post(
+          `${this.auth0Config.domain}/api/v2/roles/${this.auth0Config.tutorRoleId}/users`,
+          { users: [userId] },
+          { headers: { Authorization: `Bearer ${managementToken}` } }
+        );
+      }
+
+      return { 
+        ok: true, 
+        createdUser: {
+          email: email,
+          status: 'success',
+          user: response.data
+        }
+      };
+    } catch (error) {
+      console.error(`Error al crear usuario ${email}:`, error.response?.data || error.message);
+      return { 
+        ok: false, 
+        error: {
+          email: email,
+          status: 'error',
+          error: error.response?.data?.message || 'Error al crear usuario',
+          details: error.response?.data || error.message
+        }
+      };
+    }
+  }
 
   private async getManagementToken() {
     try {

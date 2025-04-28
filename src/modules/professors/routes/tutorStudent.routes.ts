@@ -10,6 +10,7 @@ export const tutorStudentRouter = (() => {
     router.get('/:value', controller.getTutorsByStatus.bind(controller));
     router.post('/request', controller.TutorshipRequest.bind(controller));
     router.post('/', controller.createTutor.bind(controller));
+    router.put('/', controller.updateTutor.bind(controller));
 
     return router;
 })();

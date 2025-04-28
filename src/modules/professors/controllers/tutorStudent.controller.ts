@@ -62,7 +62,6 @@ export class TutorStudentController {
             tutorId: Number(tutorId),
             studentIds: studentIds.map((id: string) => Number(id)),
             relacion,
-            value: Number(value),
           });
     
           res.status(200).json(result);
@@ -75,13 +74,22 @@ export class TutorStudentController {
     async createTutor(req: Request, res: Response) {
         try {
           const tutorData = req.body;
-    
           const tutor = await this.service.createTutor(tutorData);
           res.status(201).json(tutor);
         } catch (error) {
           this.handleError(res, error);
         }
     }
+
+    async updateTutor(req: Request, res: Response) {
+      try {
+        const { tutorId, status } = req.body;
+        const result = await this.service.updateTutorStatus(tutorId, status);
+        res.status(200).json(result);
+      } catch (error) {
+          this.handleError(res, error);
+      }
+  }
     
     private handleError(res: Response, error: any) {
         console.error(error);

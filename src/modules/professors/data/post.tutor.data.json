@@ -1,4 +1,4 @@
-{
+  {
     "name": "MARIA",
     "lastname": "GONZALEZ",
     "second_lastname": "PEREZ",
@@ -7,7 +7,7 @@
     "birth_date": "1985-03-10",
     "email": "maria.gonzalez@example.com",
     "pais": "BOLIVIA",
-    "departamento": "La Paz",
+    "departamento": "LA PAZ",
     "provincia": "MURILLO",
     "localidad": "LA PAZ",
     "url_imagefront": "https://example.com/imagefront.jpg",

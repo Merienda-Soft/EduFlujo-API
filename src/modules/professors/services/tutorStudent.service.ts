@@ -1,5 +1,7 @@
 import Database from '../../../shared/database/connection';
+import { AuthService } from '../../auth/services/auth.service';
 
+const authService = new AuthService();
 export class TutorStudentService {
     private db = Database.getInstance();
 
@@ -253,8 +255,9 @@ export class TutorStudentService {
               url_imageback: tutorData.url_imageback,
             },
           });
-      
+          authService.createTutorUser(tutorData.email);
           return {
+            success: true,
             message: 'Tutor creado exitosamente.',
             tutor,
             person,
@@ -264,81 +267,79 @@ export class TutorStudentService {
     }
 
     async TutorshipRequest(requestData: {
-        tutorId: number;
-        studentIds: number[];
-        relacion: string;
-        value: number; // accept: 1, cancel: 0
-      }) {
+      tutorId: number;
+      studentIds: number[];
+      relacion: string;
+    }) {
         return await this.db.$transaction(async (transaction) => {
-          const { tutorId, studentIds, relacion, value } = requestData;
-
-          const tutor = await transaction.tutor.findUnique({
-            where: { id: tutorId },
-            include: {
-              person: true, 
-            },
-          });
-      
-          if (!tutor) {
-            throw new Error('El tutor no existe.');
-          }
-
-          await transaction.tutor.update({
-            where: { id: tutorId },
-              data: {
-              status: value, 
-            },
-          });
-      
-          if (value === 1) {
+            const { tutorId, studentIds, relacion } = requestData;
+    
+            const tutor = await transaction.tutor.findUnique({
+                where: { id: tutorId },
+                include: {
+                    person: true,
+                },
+            });
+    
+            if (!tutor) {
+                throw new Error('El tutor no existe.');
+            }
+    
             const createdTutorships = [];
             for (const studentId of studentIds) {
-              const student = await transaction.student.findUnique({
-                where: { id: studentId },
-                include: {
-                  person: true,
-                },
-              });
-      
-              if (!student) {
-                throw new Error(`El estudiante con ID ${studentId} no existe.`);
-              }
-      
-              const tutorship = await transaction.tutorship.create({
-                data: {
-                  tutor_id: tutorId,
-                  student_id: studentId,
-                  relacion: relacion,
-                },
-              });
-      
-              createdTutorships.push({
-                tutor: {
-                  id: tutor.id,
-                  name: tutor.person.name,
-                  lastname: tutor.person.lastname,
-                  second_lastname: tutor.person.second_lastname,
-                },
-                student: {
-                  id: student.id,
-                  name: student.person.name,
-                  lastname: student.person.lastname,
-                  second_lastname: student.person.second_lastname,
-                },
-                relacion,
-              });
+                const student = await transaction.student.findUnique({
+                    where: { id: studentId },
+                    include: {
+                        person: true,
+                    },
+                });
+    
+                if (!student) {
+                    throw new Error(`El estudiante con ID ${studentId} no existe.`);
+                }
+    
+                const tutorship = await transaction.tutorship.create({
+                    data: {
+                        tutor_id: tutorId,
+                        student_id: studentId,
+                        relacion: relacion,
+                    },
+                });
+    
+                createdTutorships.push({
+                    tutor: {
+                        id: tutor.id,
+                        name: tutor.person.name,
+                        lastname: tutor.person.lastname,
+                        second_lastname: tutor.person.second_lastname,
+                    },
+                    student: {
+                        id: student.id,
+                        name: student.person.name,
+                        lastname: student.person.lastname,
+                        second_lastname: student.person.second_lastname,
+                    },
+                    relacion,
+                });
             }
-      
+    
             return {
-              message: 'Tutoría creada exitosamente.',
-              tutorships: createdTutorships,
+                message: 'Tutoría creada exitosamente.',
+                tutorships: createdTutorships,
             };
-          } else {
-            return {
-              message: `Se canceló la tutoría de: ${tutor.person.name} ${tutor.person.lastname} ${tutor.person.second_lastname}.`,
-            };
-          }
         });
+    }
+    
+    async updateTutorStatus(tutorId: number, status: 0 | 1 | 2) {
+        const updatedTutor = await this.db.tutor.update({
+            where: { id: tutorId },
+            data: { status }, // 0: inactive, 1: active, 2: pending
+        });
+    
+        return {
+            message: 'Estado del tutor actualizado exitosamente.',
+            tutor: updatedTutor,
+        };
     }
 
     async getTutorsByStatus(value: number) {
