@@ -89,6 +89,40 @@ export class TutorStudentController {
       } catch (error) {
           this.handleError(res, error);
       }
+    }
+
+    async getTutorByEmail(req: Request, res: Response) {
+      try {
+          const { email } = req.params;
+  
+          if (!email) {
+              return res.status(400).json({
+                  message: 'Se requiere el email del tutor.',
+              });
+          }
+  
+          const tutor = await this.service.getTutorByEmail(email);
+          res.status(200).json(tutor);
+      } catch (error) {
+          this.handleError(res, error);
+      }
+    }
+    
+    async getStudentsByCourseId(req: Request, res: Response) {
+      try {
+          const { courseId } = req.params;
+  
+          if (!courseId) {
+              return res.status(400).json({
+                  message: 'Se requiere el ID del curso.',
+              });
+          }
+  
+          const students = await this.service.getStudentsByCourseId(Number(courseId));
+          res.status(200).json(students);
+      } catch (error) {
+          this.handleError(res, error);
+      }
   }
     
     private handleError(res: Response, error: any) {

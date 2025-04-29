@@ -11,6 +11,8 @@ export const tutorStudentRouter = (() => {
     router.post('/request', controller.TutorshipRequest.bind(controller));
     router.post('/', controller.createTutor.bind(controller));
     router.put('/', controller.updateTutor.bind(controller));
+    router.get('/email/:email', controller.getTutorByEmail.bind(controller));
+    router.get('/course/:courseId', controller.getStudentsByCourseId.bind(controller));
 
     return router;
 })();

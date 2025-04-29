@@ -376,4 +376,68 @@ export class TutorStudentService {
           },
         });
     }
+
+    async getTutorByEmail(email: string) {
+      const tutor = await this.db.tutor.findFirst({
+          where: {
+              person: {
+                  email: email,
+              },
+          },
+          include: {
+              person: {
+                  select: {
+                      id: true,
+                      name: true,
+                      lastname: true,
+                      second_lastname: true,
+                  },
+              },
+          },
+      });
+  
+      if (!tutor) {
+          throw new Error('No se encontró un tutor con el email proporcionado.');
+      }
+  
+      return {
+          id: tutor.person.id,
+          name: tutor.person.name,
+          lastname: tutor.person.lastname,
+          second_lastname: tutor.person.second_lastname,
+      };
+  }
+
+  async getStudentsByCourseId(courseId: number) {
+    const students = await this.db.student.findMany({
+        where: {
+            registrations: {
+                some: {
+                    course_id: courseId,
+                },
+            },
+        },
+        include: {
+            person: {
+                select: {
+                    id: true,
+                    name: true,
+                    lastname: true,
+                    second_lastname: true,
+                },
+            },
+        },
+    });
+
+    if (!students || students.length === 0) {
+        throw new Error('No se encontraron estudiantes para el curso proporcionado.');
+    }
+
+    return students.map(student => ({
+        id: student.person.id,
+        name: student.person.name,
+        lastname: student.person.lastname,
+        second_lastname: student.person.second_lastname,
+    }));
+  }
 }
