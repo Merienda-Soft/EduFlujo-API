@@ -16,7 +16,7 @@ export class AssignmentController {
 
   async createAssignments(req: Request, res: Response) {
     try {
-      const assignmentsData = req.body; // array of { course_id, professor_id, subject_id }
+      const assignmentsData = req.body; 
   
       if (!Array.isArray(assignmentsData)) {
         return res.status(400).json({ message: 'Invalid request format. Expected an array of assignments.' });

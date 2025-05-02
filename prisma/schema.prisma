@@ -22,6 +22,8 @@ model Assignment {
   course_id Int?
   professor     Professor?  @relation(fields: [professor_id], references: [id])
   professor_id  Int?
+  management     Management?  @relation(fields: [management_id], references: [id])
+  management_id  Int?
   subject     Subject?  @relation(fields: [subject_id], references: [id])
   subject_id  Int?
 }
@@ -149,6 +151,7 @@ model Management {
   marks_subject MarkSubject[]
   contents      Content[]
   registrations   Registration[]
+  assignments   Assignment[]
 }
 
 model Person {

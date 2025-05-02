@@ -2,18 +2,19 @@ import Database from '../../../shared/database/connection';
 
 export class AssignmentService {
 
-  async createAssignments(assignmentsData: { course_id: number; professor_id: number; subject_id: number }[]) {
+  async createAssignments(assignmentsData: { course_id: number; professor_id: number; management_id: number; subject_id: number }[]) {
     const db = Database.getInstance();
-  
+    console.log("ASIGNACIONES", assignmentsData);
     return await db.$transaction(async (transaction) => {
       const assignments = [];
   
-      for (const { course_id, professor_id, subject_id } of assignmentsData) {
+      for (const { course_id, professor_id, subject_id, management_id } of assignmentsData) {
         const assignment = await transaction.assignment.create({
           data: {
             course_id,
             professor_id,
             subject_id,
+            management_id,
             status: 1,
             quarter: null, 
           },
