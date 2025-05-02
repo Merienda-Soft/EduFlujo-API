@@ -12,13 +12,8 @@ export class ManagementController {
   async getAll(req: Request, res: Response) {
     try {
       const result = await this.managementService.getAllManagements();
-      const simplifiedResults = result.map(item => ({
-        id: item.id,
-        management: item.management,
-        status: item.status
-      }));
       
-      res.status(200).json(simplifiedResults);
+      res.status(200).json(result);
     } catch (error) {
       this.handleError(res, error);
     }
@@ -88,6 +83,28 @@ export class ManagementController {
       });
     } catch (error) {
       this.handleError(res, error);
+    }
+  }
+
+  async cloneAcademicStructure(req: Request, res: Response) {
+    try {
+        const { sourceManagementId, newManagementYear, quarterDates } = req.body;
+
+        if (!sourceManagementId || !newManagementYear || !quarterDates) {
+            return res.status(400).json({
+                message: 'Se requieren los parámetros sourceManagementId, newManagementYear y quarterDates.',
+            });
+        }
+
+        const result = await this.managementService.cloneAcademicStructure(
+            Number(sourceManagementId),
+            Number(newManagementYear),
+            quarterDates
+        );
+
+        res.status(200).json(result);
+    } catch (error) {
+        this.handleError(res, error);
     }
   }
 

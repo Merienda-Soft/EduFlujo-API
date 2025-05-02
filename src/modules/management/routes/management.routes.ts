@@ -12,5 +12,6 @@ export const managementRouter = (() => {
   router.get('/:id', controller.getById.bind(controller));
   router.delete('/:id', controller.delete.bind(controller));
   router.post('/', controller.createEnvironment.bind(controller));
+  router.post('/clone', controller.cloneAcademicStructure.bind(controller));
   return router;
 })();
