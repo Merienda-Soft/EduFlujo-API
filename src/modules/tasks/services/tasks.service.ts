@@ -174,6 +174,7 @@ export class TasksService {
                     },
                     data: {
                         qualification: student.qualification,
+                        comment: student.comment,
                         status: 2
                     }
                 })

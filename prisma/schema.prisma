@@ -283,6 +283,7 @@ model TaskAssignment {
   files            Json?       // Array de archivos con nombre y URL
   submitted_at     DateTime?   @default(now())
   last_update      DateTime?
+  comment          String?  // for leave a comment about task
 
   @@id([task_id, student_id])
 }

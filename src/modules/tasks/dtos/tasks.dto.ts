@@ -49,7 +49,8 @@ export const createTaskWithAssignmentsSchema = z.object({
 export const gradeTaskSchema = z.object({
     students: z.array(z.object({
         student_id: z.number().int().positive("El ID del estudiante es requerido"),
-        qualification: z.string().max(10, "La calificación no puede exceder 10 caracteres")
+        qualification: z.string().max(10, "La calificación no puede exceder 10 caracteres"),
+        comment: z.string().optional()
     }))
 });
 
