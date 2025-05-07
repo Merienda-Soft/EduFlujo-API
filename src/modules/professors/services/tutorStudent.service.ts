@@ -109,7 +109,8 @@ export class TutorStudentService {
 
                 return {
                     tutor: {
-                        id: tutorData.id
+                        id: tutorData.id,
+                        status: tutorData.status
                     },
                     students: tutorData.students.map(tutorship => ({
                         student: {
