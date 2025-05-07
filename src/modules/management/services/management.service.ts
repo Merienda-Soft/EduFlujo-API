@@ -54,6 +54,11 @@ export class ManagementService {
     const prisma = Database.getInstance();
   
     return await prisma.$transaction(async (tx) => {
+      await tx.management.updateMany({
+        data: {
+            status: 0,
+        },
+      });
       const newManagement = await tx.management.create({
         data: {
           management: newManagementYear,
@@ -68,7 +73,7 @@ export class ManagementService {
           third_quarter_end: quarterDates.third_quarter_end
         }
       });
-  
+
       const clonedCourses = await tx.$queryRaw<{count: bigint}>`
         WITH inserted_courses AS (
           INSERT INTO "Course" (parallel, course, status, degree_id, management_id, last_update)
@@ -166,7 +171,21 @@ export class ManagementService {
         `,
         
         tx.$queryRaw<{count: bigint}>`
-          WITH inserted AS (
+          WITH valid_students AS (
+            -- EFECTIVOS & MARK SUBJECT < 51
+            SELECT DISTINCT r.student_id
+            FROM "Registration" r
+            JOIN "Student" s ON r.student_id = s.id
+            WHERE r.management_id = ${sourceManagementId}
+            AND s.matricula = 'EFECTIVO'
+            AND NOT EXISTS (
+              SELECT 1 FROM "MarkSubject" ms
+              WHERE ms.student_id = r.student_id
+              AND ms.management_id = ${sourceManagementId}
+              AND ms.mark_subject < 51
+            )
+          ),
+          inserted AS (
             INSERT INTO "Registration" (course_id, student_id, management_id)
             SELECT 
               new_c._id, 
@@ -188,6 +207,7 @@ export class ManagementService {
                 END
               )
             WHERE r.management_id = ${sourceManagementId}
+            AND r.student_id IN (SELECT student_id FROM valid_students)
             RETURNING 1
           )
           SELECT COUNT(*) FROM inserted

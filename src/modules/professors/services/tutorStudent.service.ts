@@ -141,6 +141,197 @@ export class TutorStudentService {
             throw error;
         }
     }
+
+    async createTutorWithTutorships(combinedData: {
+        name: string;
+        lastname: string;
+        second_lastname: string;
+        gender: string;
+        ci: string;
+        birth_date: string;
+        email: string;
+        pais: string;
+        departamento: string;
+        provincia: string;
+        localidad: string;
+        url_imagefront: string;
+        url_imageback: string;
+        studentIds: number[];
+        relacion: string;
+      }) {
+        return await this.db.$transaction(async (transaction) => {
+          const { studentIds, relacion, ...tutorData } = combinedData;
+      
+          const countryName = tutorData.pais?.trim().toUpperCase() || 'NINGUNO';
+          const departmentName = tutorData.departamento?.trim().toUpperCase() || 'NINGUNO';
+          const provinceName = tutorData.provincia?.trim().toUpperCase() || 'NINGUNO';
+          const townName = tutorData.localidad?.trim().toUpperCase() || 'NINGUNO';
+      
+          // Register or get country
+          let country = await transaction.country.findFirst({
+            where: { country: countryName },
+          });
+      
+          if (!country) {
+            country = await transaction.country.create({
+              data: { country: countryName },
+            });
+          }
+      
+          // Register or get department (related to country)
+          let department = await transaction.departament.findFirst({
+            where: {
+              departament: departmentName,
+              country_id: country.id,
+            },
+          });
+      
+          if (!department) {
+            department = await transaction.departament.create({
+              data: {
+                departament: departmentName,
+                country_id: departmentName === 'NINGUNO' ? 1 : country.id,
+              },
+            });
+          }
+      
+          // Register or get province (related to department)
+          let province = await transaction.province.findFirst({
+            where: {
+              province: provinceName,
+              departament_id: department.id,
+            },
+          });
+      
+          if (!province) {
+            province = await transaction.province.create({
+              data: {
+                province: provinceName,
+                departament_id: provinceName === 'NINGUNO' ? 1 : department.id,
+              },
+            });
+          }
+      
+          // Register or get town (related to province)
+          let town = await transaction.town.findFirst({
+            where: {
+              town: townName,
+              province_id: province.id,
+            },
+          });
+      
+          if (!town) {
+            town = await transaction.town.create({
+              data: {
+                town: townName,
+                province_id: townName === 'NINGUNO' ? 1 : province.id,
+              },
+            });
+          }
+      
+          const existingPerson = await transaction.person.findFirst({
+            where: { email: tutorData.email },
+          });
+      
+          if (existingPerson) {
+            throw new Error('El tutor ya existe con el correo proporcionado.');
+          }
+      
+          const person = await transaction.person.create({
+            data: {
+              name: tutorData.name,
+              lastname: tutorData.lastname,
+              second_lastname: tutorData.second_lastname,
+              gender: tutorData.gender,
+              ci: tutorData.ci || null,
+              birth_date: tutorData.birth_date ? new Date(tutorData.birth_date) : null,
+              email: tutorData.email,
+              status: 1, 
+              town_id: town.id, 
+            },
+          });
+      
+          const tutor = await transaction.tutor.create({
+            data: {
+              id: person.id, 
+              status: 2, // 0: inactive, 1: active, 2: pending
+              url_imagefront: tutorData.url_imagefront,
+              url_imageback: tutorData.url_imageback,
+            },
+          });
+      
+          authService.createTutorUser(tutorData.email);
+      
+          const createdTutorships = [];
+          for (const studentId of studentIds) {
+            const student = await transaction.student.findUnique({
+              where: { id: studentId },
+              include: {
+                person: true,
+              },
+            });
+      
+            if (!student) {
+              throw new Error(`El estudiante con ID ${studentId} no existe.`);
+            }
+      
+            const tutorship = await transaction.tutorship.create({
+              data: {
+                tutor_id: tutor.id,
+                student_id: studentId,
+                relacion: relacion,
+              },
+            });
+      
+            createdTutorships.push({
+              tutor: {
+                id: tutor.id,
+                name: person.name,
+                lastname: person.lastname,
+                second_lastname: person.second_lastname,
+              },
+              student: {
+                id: student.id,
+                name: student.person.name,
+                lastname: student.person.lastname,
+                second_lastname: student.person.second_lastname,
+              },
+              relacion,
+            });
+          }
+      
+          return {
+            success: true,
+            message: 'Tutorías creados exitosamente.',
+            tutor,
+            person,
+            location: { country, department, province, town },
+            tutorships: createdTutorships,
+          };
+        });
+    }
+
+    async getStudentIdByRudeOrCi(rudeOrCi: { rude?: string; ci?: string }) {
+      const { rude, ci } = rudeOrCi;
+      if (!rude && !ci) {
+          throw new Error('Se debe proporcionar al menos el Rude o el CI.');
+      }
+      const student = await this.db.student.findFirst({
+          where: {
+              OR: [
+                  { rude: rude || undefined },
+                  { person: { ci: ci || undefined } },
+              ],
+          },
+          select: {
+              id: true,
+          },
+      });
+      if (!student) {
+          throw new Error('No se encontró un estudiante con el Rude o CI proporcionado.');
+      }
+      return { id: student.id };
+    }
     
     async createTutor(tutorData: {
         name: string;

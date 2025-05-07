@@ -35,6 +35,7 @@ export class ManagementController {
 
   async getDegree(req: Request, res: Response) {
     try {
+      await this.environmentService.ensureBaseEntities();
       const result = await this.managementService.getAllDegree();
       const simplifiedResults = result.map(item => ({
         id: item.id,

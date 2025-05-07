@@ -69,7 +69,6 @@ export class TutorStudentController {
           this.handleError(res, error);
         }
     }
-    
 
     async createTutor(req: Request, res: Response) {
         try {
@@ -79,6 +78,26 @@ export class TutorStudentController {
         } catch (error) {
           this.handleError(res, error);
         }
+    }
+
+    async createTutorship(req: Request, res: Response) {
+        try {
+          const tutorData = req.body;
+          const tutor = await this.service.createTutorWithTutorships(tutorData);
+          res.status(201).json(tutor);
+        } catch (error) {
+          this.handleError(res, error);
+        }
+    }
+
+    async getStudentIdByRudeOrCi(req: Request, res: Response) {
+      try {
+          const { rude, ci } = req.body;
+          const result = await this.service.getStudentIdByRudeOrCi({ rude, ci });
+          res.status(200).json(result);
+      } catch (error) {
+          this.handleError(res, error);
+      }
     }
 
     async updateTutor(req: Request, res: Response) {
