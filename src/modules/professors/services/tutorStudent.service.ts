@@ -109,7 +109,8 @@ export class TutorStudentService {
 
                 return {
                     tutor: {
-                        id: tutorData.id
+                        id: tutorData.id,
+                        status: tutorData.status
                     },
                     students: tutorData.students.map(tutorship => ({
                         student: {
@@ -597,9 +598,40 @@ export class TutorStudentService {
           lastname: tutor.person.lastname,
           second_lastname: tutor.person.second_lastname,
       };
-  }
+    }
 
-  async getStudentsByCourseId(courseId: number) {
+    async getStudentByEmail(email: string) {
+      const student = await this.db.student.findFirst({
+          where: {
+              person: {
+                  email: email,
+              },
+          },
+          include: {
+              person: {
+                  select: {
+                      id: true,
+                      name: true,
+                      lastname: true,
+                      second_lastname: true,
+                  },
+              },
+          },
+      });
+  
+      if (!student) {
+          throw new Error('No se encontró un estudiante con el email proporcionado.');
+      }
+  
+      return {
+          id: student.person.id,
+          name: student.person.name,
+          lastname: student.person.lastname,
+          second_lastname: student.person.second_lastname,
+      };
+    }
+
+    async getStudentsByCourseId(courseId: number) {
     const students = await this.db.student.findMany({
         where: {
             registrations: {
