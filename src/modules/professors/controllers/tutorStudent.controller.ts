@@ -107,6 +107,23 @@ export class TutorStudentController {
           this.handleError(res, error);
       }
     }
+
+    async getStudentByEmail(req: Request, res: Response) {
+      try {
+          const { email } = req.params;
+  
+          if (!email) {
+              return res.status(400).json({
+                  message: 'Se requiere el email del estudiante.',
+              });
+          }
+  
+          const student = await this.service.getStudentByEmail(email);
+          res.status(200).json(student);
+      } catch (error) {
+          this.handleError(res, error);
+      }
+    }
     
     async getStudentsByCourseId(req: Request, res: Response) {
       try {
