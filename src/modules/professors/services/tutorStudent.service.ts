@@ -326,6 +326,9 @@ export class TutorStudentService {
           },
           select: {
               id: true,
+              rude: true,
+              matricula: true,
+              person: true
           },
       });
       if (!student) {
