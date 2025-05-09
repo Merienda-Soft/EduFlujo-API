@@ -74,88 +74,61 @@ export class EnvironmentService {
   }
   
   async CreateEnvironment(
-    managementData: CreateManagementDto, 
-    gradeCourseData: 
-    { 
-      grade: number; 
-      courseCount: number; 
-      parallels: string[] 
-    }[], 
-    subjectIds: number[] 
-  ) {
-    const db = Database.getInstance();
+  managementData: CreateManagementDto,
+  gradeCourseData: {
+    grade: number;
+    courseCount: number;
+    parallels: string[];
+  }[],
+  subjectIds: number[]
+) {
+  const db = Database.getInstance();
 
-    // Management DTO
-    return await db.$transaction(async (transaction) => {
-      // Create the management
-      const management = await this.createManagement(transaction, managementData);
-
-      // Create courses and curriculums
-      await this.createCoursesAndCurriculums(transaction, management.id, gradeCourseData, subjectIds);
-
-      return management; 
-    });
-  }
-
-  private async createManagement(transaction: any, managementData: CreateManagementDto) {
-    return await transaction.management.create({
+  return await db.$transaction(async (tx) => {
+    // 1. Create management
+    const management = await tx.management.create({
       data: {
         ...managementData,
-        status: managementData.status ?? 1, // Default status to 1 if not provided
+        status: managementData.status ?? 1,
       },
     });
-  }
 
-  private async createCoursesAndCurriculums(
-    transaction: any,
-    managementId: number,
-    gradeCourseData: { grade: number; courseCount: number; parallels: string[] }[],
-    subjectIds: number[]
-  ) {
-    for (const gradeData of gradeCourseData) {
-      const { grade, courseCount, parallels } = gradeData;
+    // 2. Process each grade configuration
+    for (const gradeConfig of gradeCourseData) {
+      const { grade, courseCount, parallels } = gradeConfig;
 
       if (courseCount !== parallels.length) {
-        throw new Error(
-          `Mismatch between course count (${courseCount}) and parallels (${parallels.length}) for grade ${grade}`
-        );
+        throw new Error(`Parallels count doesn't match courseCount for grade ${grade}`);
       }
 
+      // 3. Create each course for this grade
       for (let i = 0; i < courseCount; i++) {
-        const course = await this.createCourse(transaction, grade, parallels[i], managementId);
+        const course = await tx.course.create({
+          data: {
+            course: `${grade}° ${parallels[i]}`,
+            parallel: parallels[i],
+            degree_id: grade,
+            management_id: management.id,
+          },
+        });
 
-        // Create curriculums for each subject in the course
-        await this.createCurriculums(transaction, course.id, subjectIds, managementId);
+        // 4. Create curriculum for each subject
+        for (const subjectId of subjectIds) {
+          await tx.curriculum.create({
+            data: {
+              course_id: course.id,
+              subject_id: subjectId,
+              management_id: management.id,
+            },
+          });
+        }
       }
     }
-  }
 
-  private async createCourse(transaction: any, grade: number, parallel: string, managementId: number) {
-    const courseDescription = `${grade}° ${parallel}`;
-    return await transaction.course.create({
-      data: {
-        course: courseDescription,
-        parallel: parallel,
-        degree_id: grade,
-        management_id: managementId,
-      },
-    });
-  }
-
-  private async createCurriculums(
-    transaction: any,
-    courseId: number,
-    subjectIds: number[],
-    managementId: number
-  ) {
-    for (const subjectId of subjectIds) {
-      await transaction.curriculum.create({
-        data: {
-          course_id: courseId,
-          subject_id: subjectId,
-          management_id: managementId,
-        },
-      });
-    }
-  }
+    return management;
+  }, {
+    maxWait: 30000, 
+    timeout: 60000  
+  });
+}
 }
