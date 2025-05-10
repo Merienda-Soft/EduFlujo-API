@@ -20,6 +20,7 @@ export const tasksRouter = (() => {
     // Rutas para filtros específicos
     router.get('/student/:studentId/course/:courseId/subject/:subjectId/management/:managementId', tController.getTasksByStudent.bind(tController));
     router.get('/professor/:professorId/course/:courseId/subject/:subjectId/management/:managementId', tController.getTasksByProfessorCourseSubjectManagement.bind(tController));
+    router.get('/course/:courseId/professor/:professorId/management/:managementId', tController.getTasksByCourseAndProfessor.bind(tController));
 
     // Subir archivos de tarea
     router.post('/submit', tController.submitTaskFiles.bind(tController));

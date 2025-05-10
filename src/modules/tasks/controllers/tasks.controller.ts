@@ -117,6 +117,32 @@ export class TasksController {
         }
     }
 
+    async getTasksByCourseAndProfessor(req: Request, res: Response) {
+        try {
+            const { courseId, professorId, managementId } = req.params;
+            
+            if (!courseId || !professorId || !managementId) {
+                return res.status(400).json({
+                    ok: false,
+                    error: 'Se requieren courseId, professorId y managementId'
+                });
+            }
+
+            const result = await this.service.getTasksByCourseAndProfessor(
+                Number(courseId),
+                Number(professorId),
+                Number(managementId)
+            );
+
+            res.status(200).json({
+                ok: true,
+                data: result
+            });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
     async getTaskByIdWithAssignments(req: Request, res: Response) {
         try {
             const { id } = req.params;
