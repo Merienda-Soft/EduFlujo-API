@@ -1,5 +1,8 @@
 import Database from '../../../shared/database/connection';
 import { CreateTaskWithAssignmentsDto, TaskAssignmentDto, GradeTaskDto } from '../dtos/tasks.dto';
+import * as ExcelJS from 'exceljs';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export class TasksService {
     private db = Database.getInstance();
@@ -260,6 +263,9 @@ export class TasksService {
     }
 
     async getTasksByCourseAndProfessor(courseId: number, professorId: number, managementId: number) {
+        // Generar el Excel y obtener el nombre del archivo
+        const excelResult = await this.exportStudentsToExcel(courseId, professorId);
+
         // Primero obtenemos la información del management para las fechas de los quarters
         const management = await this.db.management.findUnique({
             where: { id: managementId }
@@ -434,7 +440,9 @@ export class TasksService {
 
         return {
             ...compactResult,
-            annualTotal
+            annualTotal,
+            excelFile: excelResult.fileName,
+            excelPath: excelResult.filePath
         };
     }
 
@@ -550,5 +558,103 @@ export class TasksService {
 
             return updatedAssignment;
         });
+    }
+
+    async exportStudentsToExcel(courseId: number, professorId: number) {
+        // Obtener el curso y el profesor
+        const course = await this.db.course.findUnique({ where: { id: courseId } });
+        const courseName = course?.course ? course.course.replace(/\s+/g, '_') : 'curso';
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const fileName = `registro_notas_${courseName}_${dateStr}_prof${professorId}.xlsx`;
+        const exportDir = path.join(process.cwd(), 'public', 'exports');
+        const templatePath = path.join(process.cwd(), 'public', 'plantilla_registro_notas.xlsx');
+        const exportPath = path.join(exportDir, fileName);
+
+        // Crear carpeta si no existe
+        if (!fs.existsSync(exportDir)) {
+            fs.mkdirSync(exportDir, { recursive: true });
+        }
+        // Copiar plantilla antes de modificar cualquier dato
+        fs.copyFileSync(templatePath, exportPath);
+
+        // Cargar el archivo copiado con exceljs
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(exportPath);
+        const filiacionSheet = workbook.getWorksheet('FILIACIÓN');
+        if (!filiacionSheet) {
+            throw new Error("Sheet FILIACIÓN not found in template");
+        }
+
+        // Obtener los estudiantes del curso con su información personal
+        const registrations = await this.db.registration.findMany({
+            where: { course_id: courseId },
+            include: {
+                student: {
+                    include: {
+                        person: true
+                    }
+                }
+            }
+        });
+
+        // Mapear los datos de los estudiantes y separar apellidos/nombres
+        let row = 8;
+        registrations.forEach(reg => {
+            const p = reg.student.person;
+            // Unir nombre completo para separar como en el ejemplo
+            const fullName = [p.lastname, p.second_lastname, p.name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+            const nameParts = fullName.split(' ');
+            let apPaterno = '', apMaterno = '', nombres = '';
+            if (nameParts.length >= 3) {
+                apPaterno = nameParts[0];
+                apMaterno = nameParts[1];
+                nombres = nameParts.slice(2).join(' ');
+            } else if (nameParts.length === 2) {
+                apPaterno = nameParts[0];
+                nombres = nameParts[1];
+            } else {
+                nombres = nameParts[0] || '';
+            }
+            // Fecha de nacimiento
+            let birth_day = '', birth_month = '', birth_year = '', age = '';
+            if (p.birth_date) {
+                const birthDate = new Date(p.birth_date);
+                birth_day = birthDate.getDate().toString().padStart(2, '0');
+                birth_month = (birthDate.getMonth() + 1).toString().padStart(2, '0');
+                birth_year = birthDate.getFullYear().toString();
+                const today = new Date();
+                age = (today.getFullYear() - birthDate.getFullYear()).toString();
+                const m = today.getMonth() - birthDate.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                    age = (parseInt(age) - 1).toString();
+                }
+            }
+
+            // Escribir los valores en las celdas
+            filiacionSheet.getCell(`B${row}`).value = apPaterno;
+            filiacionSheet.getCell(`C${row}`).value = apMaterno;
+            filiacionSheet.getCell(`D${row}`).value = nombres;
+            filiacionSheet.getCell(`E${row}`).value = reg.student.rude || '';
+            filiacionSheet.getCell(`F${row}`).value = p.ci || '';
+            filiacionSheet.getCell(`G${row}`).value = birth_day;
+            filiacionSheet.getCell(`H${row}`).value = birth_month;
+            filiacionSheet.getCell(`I${row}`).value = birth_year;
+            filiacionSheet.getCell(`K${row}`).value = p.gender || '';
+
+            // Asegurarnos de que las fórmulas se mantengan
+            const nominaSheet = workbook.getWorksheet('NÓMINA');
+            if (nominaSheet) {
+                const cell = nominaSheet.getCell(`B${row}`);
+                // En lugar de intentar establecer la fórmula directamente,
+                // copiamos el valor de la celda B de la hoja FILIACIÓN
+                cell.value = filiacionSheet.getCell(`B${row}`).value;
+            }
+
+            row++;
+        });
+
+        workbook.calcProperties.fullCalcOnLoad = true;
+        await workbook.xlsx.writeFile(exportPath);
+        return { ok: true, fileName, filePath: `/public/exports/${fileName}` };
     }
 }
