@@ -7,6 +7,38 @@ import * as fs from 'fs';
 export class TasksService {
     private db = Database.getInstance();
 
+    // Helper method to determine which quarter a task belongs to
+    private getTaskQuarter(taskDate: Date, management: any): number | null {
+        if (!taskDate) return null;
+        
+        if (management.first_quarter_start && management.first_quarter_end && 
+            taskDate >= new Date(management.first_quarter_start) && 
+            taskDate <= new Date(management.first_quarter_end)) {
+            return 1;
+        }
+        if (management.second_quarter_start && management.second_quarter_end && 
+            taskDate >= new Date(management.second_quarter_start) && 
+            taskDate <= new Date(management.second_quarter_end)) {
+            return 2;
+        }
+        if (management.third_quarter_start && management.third_quarter_end && 
+            taskDate >= new Date(management.third_quarter_start) && 
+            taskDate <= new Date(management.third_quarter_end)) {
+            return 3;
+        }
+        return null;
+    }
+
+    // Helper method to convert quarter number to quarter key
+    private getQuarterKey(quarter: number | null): string {
+        switch (quarter) {
+            case 1: return 'first_quarter';
+            case 2: return 'second_quarter';
+            case 3: return 'third_quarter';
+            default: return 'other';
+        }
+    }
+
     async createTask(data: CreateTaskWithAssignmentsDto) {
         const { task, assignments = [] } = data;
 
@@ -263,10 +295,7 @@ export class TasksService {
     }
 
     async getTasksByCourseAndProfessor(courseId: number, professorId: number, managementId: number) {
-        // Generar el Excel y obtener el nombre del archivo
-        const excelResult = await this.exportStudentsToExcel(courseId, professorId);
-
-        // Primero obtenemos la información del management para las fechas de los quarters
+        // Obtener la información del management para las fechas de los quarters
         const management = await this.db.management.findUnique({
             where: { id: managementId }
         });
@@ -275,7 +304,7 @@ export class TasksService {
             throw new Error('No se encontró la gestión especificada');
         }
 
-        // Obtenemos todas las tareas
+        // Obtener todas las tareas con sus asignaciones y relaciones
         const tasks = await this.db.task.findMany({
             where: {
                 status: 1,
@@ -311,139 +340,451 @@ export class TasksService {
             }
         });
 
-        // Función para determinar el quarter de una tarea
-        const getTaskQuarter = (taskDate: Date) => {
-            if (management.first_quarter_start && management.first_quarter_end && 
-                taskDate >= management.first_quarter_start && taskDate <= management.first_quarter_end) {
-                return 'first_quarter';
-            }
-            if (management.second_quarter_start && management.second_quarter_end && 
-                taskDate >= management.second_quarter_start && taskDate <= management.second_quarter_end) {
-                return 'second_quarter';
-            }
-            if (management.third_quarter_start && management.third_quarter_end && 
-                taskDate >= management.third_quarter_start && taskDate <= management.third_quarter_end) {
-                return 'third_quarter';
-            }
-            return 'other';
+        // Si no hay tareas, retornar estructura vacía
+        if (tasks.length === 0) {
+            return {
+                first_quarter: {
+                    students: {},
+                    ser_decidir: {}
+                },
+                second_quarter: {
+                    students: {},
+                    ser_decidir: {}
+                },
+                third_quarter: {
+                    students: {},
+                    ser_decidir: {}
+                }
+            };
+        }
+
+        // Función para obtener el mes de una fecha
+        const getMonthKey = (date: Date) => {
+            return date.toLocaleString('es-ES', { month: 'long' });
         };
 
-        // Nueva estructura para la respuesta compacta
-        const compactResult = {
-            first_quarter: {},
-            second_quarter: {},
-            third_quarter: {},
-            other: {}
+        // Nueva estructura para organizar las notas
+        const result = {
+            first_quarter: {
+                students: {},
+                ser_decidir: {}
+            },
+            second_quarter: {
+                students: {},
+                ser_decidir: {}
+            },
+            third_quarter: {
+                students: {},
+                ser_decidir: {}
+            }
         };
 
+        // Procesar cada tarea y sus asignaciones
         tasks.forEach(task => {
-            const quarter = getTaskQuarter(task.start_date);
-            const subjectId = task.subject.id;
-            const subjectName = task.subject.subject;
+            const quarterNum = this.getTaskQuarter(task.start_date, management);
+            const quarter = this.getQuarterKey(quarterNum);
+            const month = getMonthKey(task.start_date);
+            const dimensionId = task.dimension.id;
 
             task.assignments.forEach(assignment => {
                 const studentId = assignment.student.id;
-                const dimensionId = task.dimension.id;
-                const dimensionName = task.dimension.dimension;
-                const dimensionValue = task.dimension.value;
+                const studentName = `${assignment.student.person.lastname} ${assignment.student.person.second_lastname || ''} ${assignment.student.person.name}`.trim();
+                const subjectId = task.subject.id;
+                const subjectName = task.subject.subject;
 
-                // Inicializar materia si no existe
-                if (!compactResult[quarter][subjectId]) {
-                    compactResult[quarter][subjectId] = {
-                        subject: subjectName,
-                        students: {}
-                    };
-                }
-
-                // Inicializar estudiante si no existe
-                if (!compactResult[quarter][subjectId].students[studentId]) {
-                    compactResult[quarter][subjectId].students[studentId] = {
-                        dimensions: {}
-                    };
-                }
-
-                // Inicializar dimensión si no existe
-                if (!compactResult[quarter][subjectId].students[studentId].dimensions[dimensionId]) {
-                    compactResult[quarter][subjectId].students[studentId].dimensions[dimensionId] = {
-                        dimension: dimensionName,
-                        value: dimensionValue,
-                        tasks: []
-                    };
-                }
-
-                // Agregar la calificación de la tarea a la dimensión
-                compactResult[quarter][subjectId].students[studentId].dimensions[dimensionId].tasks.push({
-                    qualification: assignment.qualification
-                });
-            });
-        });
-
-        // Calcular el promedio final por dimensión y limpiar la estructura
-        Object.keys(compactResult).forEach(quarter => {
-            Object.keys(compactResult[quarter]).forEach(subjectId => {
-                const students = compactResult[quarter][subjectId].students;
-                Object.keys(students).forEach(studentId => {
-                    const dimensions = students[studentId].dimensions;
-                    let totalQuarter = 0;
-                    Object.keys(dimensions).forEach(dimensionId => {
-                        const dim = dimensions[dimensionId];
-                        // Calcular promedio solo si hay tareas
-                        if (dim.tasks.length > 0) {
-                            // Limpiar y convertir calificaciones
-                            const validQualifications = dim.tasks
-                                .map(t => t.qualification)
-                                .filter(q => q !== null && q !== undefined)
-                                .map(q => parseFloat(q.toString().trim()))
-                                .filter(q => !isNaN(q));
-                            if (validQualifications.length > 0) {
-                                const avg100 = validQualifications.reduce((a, b) => a + b, 0) / validQualifications.length;
-                                const avgDimension = Number(((avg100 * dim.value) / 100).toFixed(2));
-                                // Guardar solo el promedio final
-                                dimensions[dimensionId] = avgDimension;
-                                totalQuarter += avgDimension;
-                            } else {
-                                dimensions[dimensionId] = 0;
+                // Procesar SER, DECIDIR y AUTOEVALUACIÓN a nivel de curso/trimestre
+                if (dimensionId === 1 || dimensionId === 4 || dimensionId === 5) {
+                    if (!result[quarter].ser_decidir[studentId]) {
+                        result[quarter].ser_decidir[studentId] = {
+                            studentName,
+                            dimensions: {
+                                1: { weight: 5, tasks: [], average: null },  // SER
+                                4: { weight: 5, tasks: [], average: null },  // DECIDIR
+                                5: { weight: 5, tasks: [], average: null }   // AUTOEVALUACIÓN
                             }
-                        } else {
-                            dimensions[dimensionId] = 0;
+                        };
+                    }
+
+                    if (assignment.qualification !== null && assignment.qualification !== undefined) {
+                        const qualification = parseFloat(assignment.qualification.toString().trim());
+                        if (!isNaN(qualification)) {
+                            result[quarter].ser_decidir[studentId].dimensions[dimensionId].tasks.push({
+                                taskId: task.id,
+                                taskName: task.name,
+                                qualification: qualification,
+                                weight: 5
+                            });
+
+                            // Recalcular promedio con el peso correspondiente (5%)
+                            const tasks = result[quarter].ser_decidir[studentId].dimensions[dimensionId].tasks;
+                            if (tasks.length > 0) {
+                                const sum = tasks.reduce((acc, t) => acc + t.qualification, 0);
+                                const rawAverage = sum / tasks.length;
+                                // El promedio ya está sobre 100, multiplicamos por el peso (5%)
+                                result[quarter].ser_decidir[studentId].dimensions[dimensionId].average = Number((rawAverage * 0.05).toFixed(2));
+                            }
                         }
-                    });
-                    // Agregar el total del quarter
-                    students[studentId].totalQuarter = Number(totalQuarter.toFixed(2));
-                });
-            });
-        });
-
-        // Calcular el total anual (promedio de los totales por quarter)
-        const annualTotal = {};
-        Object.keys(compactResult).forEach(quarter => {
-            Object.keys(compactResult[quarter]).forEach(subjectId => {
-                const students = compactResult[quarter][subjectId].students;
-                Object.keys(students).forEach(studentId => {
-                    if (!annualTotal[studentId]) {
-                        annualTotal[studentId] = {};
                     }
-                    if (!annualTotal[studentId][subjectId]) {
-                        annualTotal[studentId][subjectId] = 0;
+                } else { // SABER y HACER
+                    // Inicializar la estructura si no existe
+                    if (!result[quarter].students[studentId]) {
+                        result[quarter].students[studentId] = {
+                            studentName,
+                            subjects: {}
+                        };
                     }
-                    annualTotal[studentId][subjectId] += students[studentId].totalQuarter;
-                });
+
+                    if (!result[quarter].students[studentId].subjects[subjectId]) {
+                        result[quarter].students[studentId].subjects[subjectId] = {
+                            subjectName,
+                            months: {}
+                        };
+                    }
+
+                    if (!result[quarter].students[studentId].subjects[subjectId].months[month]) {
+                        result[quarter].students[studentId].subjects[subjectId].months[month] = {
+                            dimensions: {
+                                2: { weight: 45, tasks: [], average: null }, // SABER
+                                3: { weight: 40, tasks: [], average: null }  // HACER
+                            }
+                        };
+                    }
+
+                    // Agregar la calificación a la dimensión correspondiente
+                    if (assignment.qualification !== null && assignment.qualification !== undefined) {
+                        const qualification = parseFloat(assignment.qualification.toString().trim());
+                        if (!isNaN(qualification)) {
+                            const dimension = result[quarter].students[studentId].subjects[subjectId].months[month].dimensions[dimensionId];
+                            dimension.tasks.push({
+                                taskId: task.id,
+                                taskName: task.name,
+                                qualification: qualification,
+                                weight: dimension.weight
+                            });
+
+                            // Recalcular promedio con el peso correspondiente
+                            if (dimension.tasks.length > 0) {
+                                const sum = dimension.tasks.reduce((acc, t) => acc + t.qualification, 0);
+                                const rawAverage = sum / dimension.tasks.length;
+                                // El promedio ya está sobre 100, multiplicamos por el peso (45% para SABER, 40% para HACER)
+                                const weightMultiplier = dimensionId === 2 ? 0.45 : 0.40; // SABER = 45%, HACER = 40%
+                                dimension.average = Number((rawAverage * weightMultiplier).toFixed(2));
+                            }
+                        }
+                    }
+                }
             });
         });
 
-        // Agregar el total anual a la respuesta
-        Object.keys(annualTotal).forEach(studentId => {
-            Object.keys(annualTotal[studentId]).forEach(subjectId => {
-                annualTotal[studentId][subjectId] = Number((annualTotal[studentId][subjectId] / 3).toFixed(2));
-            });
+        // Generar archivos Excel
+        await this.generateQuarterlyExcelFiles(courseId, professorId, result);
+
+        return result;
+    }
+
+    private roundGrade(grade: number): number {
+        const decimalPart = grade % 1;
+        if (decimalPart >= 0.5) {
+            return Math.ceil(grade);
+        }
+        return Math.floor(grade);
+    }
+
+    // Subject name mapping configuration
+    private subjectMapping = {
+        'LENGUAJE': 'LENG',
+        'CIENCIAS SOCIALES': 'CIEN SOC',
+        'EDUCACIÓN FÍSICA Y DEPORTES': 'ED FISICA',
+        'EDUCACIÓN MUSICAL': 'ED MUSICA',
+        'ARTES PLÁSTICAS Y VISUALES': 'ARTES PL',
+        'MATEMÁTICAS': 'MATE',
+        'TÉCNICA TECNOLÓGICA': 'TECN TECN',
+        'CIENCIAS NATURALES': 'CIEN NAT',
+        'VALORES, ESPIRITUALIDAD Y RELIGIONES': 'RELIGION'
+    };
+
+    // Column configuration for each subject worksheet
+    private columnConfig = {
+        'LENG': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['L', 'M', 'N', 'O', 'P', 'Q']
+        },
+        'CIEN SOC': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['J', 'K', 'L', 'M', 'N']
+        },
+        'ED FISICA': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['J', 'K', 'L', 'M', 'N']
+        },
+        'ED MUSICA': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['J', 'K', 'L', 'M', 'N']
+        },
+        'ARTES PL': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['J', 'K', 'L', 'M', 'N']
+        },
+        'MATE': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['K', 'L', 'M', 'N', 'O']
+        },
+        'TECN TECN': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['J', 'K', 'L', 'M', 'N']
+        },
+        'CIEN NAT': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['J', 'K', 'L', 'M', 'N']
+        },
+        'RELIGION': {
+            saber: ['D', 'E', 'F', 'G', 'H'],
+            hacer: ['J', 'K', 'L', 'M', 'N']
+        }
+    };
+
+    // Columnas disponibles para SER y DECIDIR por trimestre
+    private serDecidirColumns = {
+        ser: {
+            1: 'C',  // primer trimestre
+            2: 'D',  // segundo trimestre
+            3: 'E'   // tercer trimestre
+        },
+        decidir: {
+            1: 'I',  // primer trimestre
+            2: 'J',  // segundo trimestre
+            3: 'K'   // tercer trimestre
+        }
+    };
+
+    // Columna para autoevaluación (siempre es C)
+    private autoevaluacionColumn = 'C';
+
+    // Helper function to find the most similar subject name
+    private findMatchingSubject(subjectName: string): string | null {
+        const normalizedInput = subjectName.toUpperCase().trim();
+        
+        // Direct match check
+        for (const [dbName, excelName] of Object.entries(this.subjectMapping)) {
+            if (normalizedInput === dbName) {
+                return excelName;
+            }
+        }
+
+        // Similarity check
+        let bestMatch = null;
+        let highestSimilarity = 0;
+
+        for (const [dbName, excelName] of Object.entries(this.subjectMapping)) {
+            const similarity = this.calculateSimilarity(normalizedInput, dbName);
+            if (similarity > highestSimilarity) {
+                highestSimilarity = similarity;
+                bestMatch = excelName;
+            }
+        }
+
+        // Only return a match if similarity is above threshold
+        return highestSimilarity > 0.7 ? bestMatch : null;
+    }
+
+    // Simple similarity calculation using Levenshtein distance
+    private calculateSimilarity(str1: string, str2: string): number {
+        const len1 = str1.length;
+        const len2 = str2.length;
+        const matrix: number[][] = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+
+        for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+        for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+        for (let i = 1; i <= len1; i++) {
+            for (let j = 1; j <= len2; j++) {
+                const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j - 1] + cost
+                );
+            }
+        }
+
+        const distance = matrix[len1][len2];
+        const maxLength = Math.max(len1, len2);
+        return 1 - distance / maxLength;
+    }
+
+    private async generateQuarterlyExcelFiles(courseId: number, professorId: number, processedData: any) {
+        const course = await this.db.course.findUnique({ where: { id: courseId } });
+        const courseName = course?.course ? course.course.replace(/\s+/g, '_') : 'curso';
+        const dateStr = new Date().getFullYear();
+        const exportDir = path.join(process.cwd(), 'public', 'exports');
+        const templatePath = path.join(process.cwd(), 'public', 'plantilla_registro_notas.xlsx');
+
+        // Crear carpeta si no existe
+        if (!fs.existsSync(exportDir)) {
+            fs.mkdirSync(exportDir, { recursive: true });
+        }
+
+        // Crear los archivos para cada trimestre
+        const quarterFiles = [1, 2, 3].map(quarter => {
+            const quarterFileName = `registro_notas_${courseName}_${dateStr}_prof${professorId}_trimestre${quarter}.xlsx`;
+            const quarterPath = path.join(exportDir, quarterFileName);
+            fs.copyFileSync(templatePath, quarterPath);
+            return {
+                quarter,
+                fileName: quarterFileName,
+                path: quarterPath,
+                workbook: new ExcelJS.Workbook()
+            };
         });
 
-        return {
-            ...compactResult,
-            annualTotal,
-            excelFile: excelResult.fileName,
-            excelPath: excelResult.filePath
+        // Cargar todos los workbooks
+        await Promise.all(quarterFiles.map(qf => qf.workbook.xlsx.readFile(qf.path)));
+
+        // Obtener los estudiantes del curso con su información personal
+        const registrations = await this.db.registration.findMany({
+            where: { course_id: courseId },
+            include: {
+                student: {
+                    include: {
+                        person: true
+                    }
+                }
+            },
+            orderBy: {
+                student: {
+                    person: {
+                        lastname: 'asc'
+                    }
+                }
+            }
+        });
+
+        // Mapear los quarters a sus claves correspondientes
+        const quarterMap = {
+            1: 'first_quarter',
+            2: 'second_quarter',
+            3: 'third_quarter'
         };
+
+        // Procesar cada archivo trimestral
+        for (const quarterFile of quarterFiles) {
+            const filiacionSheet = quarterFile.workbook.getWorksheet('FILIACIÓN');
+            const evalSheet = quarterFile.workbook.getWorksheet('EVAL SER Y DECIDIR');
+            const autoEvalSheet = quarterFile.workbook.getWorksheet('AUTOEVALUACIÓN');
+            
+            if (!filiacionSheet || !evalSheet || !autoEvalSheet) {
+                throw new Error(`Required sheets not found in trimestre${quarterFile.quarter} file`);
+            }
+
+            // Llenar datos de FILIACIÓN
+            let row = 8;
+            for (const reg of registrations) {
+                const p = reg.student.person;
+                const fullName = [p.lastname, p.second_lastname, p.name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+                const nameParts = fullName.split(' ');
+                let apPaterno = '', apMaterno = '', nombres = '';
+                
+                if (nameParts.length >= 3) {
+                    apPaterno = nameParts[0];
+                    apMaterno = nameParts[1];
+                    nombres = nameParts.slice(2).join(' ');
+                } else if (nameParts.length === 2) {
+                    apPaterno = nameParts[0];
+                    nombres = nameParts[1];
+                } else {
+                    nombres = nameParts[0] || '';
+                }
+
+                // Escribir datos de filiación
+                filiacionSheet.getCell(`B${row}`).value = apPaterno;
+                filiacionSheet.getCell(`C${row}`).value = apMaterno;
+                filiacionSheet.getCell(`D${row}`).value = nombres;
+                filiacionSheet.getCell(`E${row}`).value = reg.student.rude || '';
+                filiacionSheet.getCell(`F${row}`).value = p.ci || '';
+                if (p.birth_date) {
+                    const birthDate = new Date(p.birth_date);
+                    filiacionSheet.getCell(`G${row}`).value = birthDate.getDate().toString().padStart(2, '0');
+                    filiacionSheet.getCell(`H${row}`).value = (birthDate.getMonth() + 1).toString().padStart(2, '0');
+                    filiacionSheet.getCell(`I${row}`).value = birthDate.getFullYear().toString();
+                }
+                filiacionSheet.getCell(`K${row}`).value = p.gender || '';
+
+                // Obtener datos del estudiante para este trimestre
+                const quarterKey = quarterMap[quarterFile.quarter];
+                const quarterData = processedData[quarterKey];
+
+                // Pintar SER y DECIDIR del trimestre
+                const serDecidirData = quarterData.ser_decidir[reg.student.id];
+                if (serDecidirData) {
+                    // Pintar SER
+                    if (serDecidirData.dimensions[1]?.average !== null) {
+                        const serColumn = this.serDecidirColumns.ser[quarterFile.quarter];
+                        evalSheet.getCell(`${serColumn}${row}`).value = this.roundGrade(serDecidirData.dimensions[1].average);
+                    }
+
+                    // Pintar DECIDIR
+                    if (serDecidirData.dimensions[4]?.average !== null) {
+                        const decidirColumn = this.serDecidirColumns.decidir[quarterFile.quarter];
+                        evalSheet.getCell(`${decidirColumn}${row}`).value = this.roundGrade(serDecidirData.dimensions[4].average);
+                    }
+
+                    // Pintar AUTOEVALUACIÓN en su propia hoja
+                    if (serDecidirData.dimensions[5]?.average !== null) {
+                        autoEvalSheet.getCell(`${this.autoevaluacionColumn}${row}`).value = 
+                            this.roundGrade(serDecidirData.dimensions[5].average);
+                    }
+                }
+
+                // Pintar SABER y HACER por materia
+                const studentData = quarterData.students[reg.student.id];
+                if (studentData?.subjects) {
+                    Object.entries(studentData.subjects).forEach(([_, subject]: [string, any]) => {
+                        const excelSheetName = this.findMatchingSubject(subject.subjectName);
+                        if (!excelSheetName) return;
+
+                        const subjectSheet = quarterFile.workbook.getWorksheet(excelSheetName);
+                        if (!subjectSheet) return;
+
+                        const columns = this.columnConfig[excelSheetName];
+                        if (!columns) return;
+
+                        let saberColumnIndex = 0;
+                        let hacerColumnIndex = 0;
+
+                        // Ordenar los meses para asegurar que se pinten en orden
+                        const sortedMonths = Object.entries(subject.months).sort((a, b) => {
+                            const monthOrder = {
+                                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+                                'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+                                'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+                            };
+                            return monthOrder[a[0]] - monthOrder[b[0]];
+                        });
+
+                        sortedMonths.forEach(([_, monthData]: [string, any]) => {
+                            // Pintar promedio SABER
+                            if (monthData.dimensions[2]?.average !== null && saberColumnIndex < columns.saber.length) {
+                                const saberColumn = columns.saber[saberColumnIndex];
+                                subjectSheet.getCell(`${saberColumn}${row}`).value = this.roundGrade(monthData.dimensions[2].average);
+                                saberColumnIndex++;
+                            }
+
+                            // Pintar promedio HACER
+                            if (monthData.dimensions[3]?.average !== null && hacerColumnIndex < columns.hacer.length) {
+                                const hacerColumn = columns.hacer[hacerColumnIndex];
+                                subjectSheet.getCell(`${hacerColumn}${row}`).value = this.roundGrade(monthData.dimensions[3].average);
+                                hacerColumnIndex++;
+                            }
+                        });
+                    });
+                }
+
+                row++;
+            }
+        }
+
+        // Guardar todos los archivos
+        await Promise.all(quarterFiles.map(qf => qf.workbook.xlsx.writeFile(qf.path)));
     }
 
     async getTaskByIdWithAssignments(taskId: number, studentId: number) {
@@ -560,101 +901,12 @@ export class TasksService {
         });
     }
 
-    async exportStudentsToExcel(courseId: number, professorId: number) {
-        // Obtener el curso y el profesor
-        const course = await this.db.course.findUnique({ where: { id: courseId } });
-        const courseName = course?.course ? course.course.replace(/\s+/g, '_') : 'curso';
-        const dateStr = new Date().toISOString().slice(0, 10);
-        const fileName = `registro_notas_${courseName}_${dateStr}_prof${professorId}.xlsx`;
-        const exportDir = path.join(process.cwd(), 'public', 'exports');
-        const templatePath = path.join(process.cwd(), 'public', 'plantilla_registro_notas.xlsx');
-        const exportPath = path.join(exportDir, fileName);
-
-        // Crear carpeta si no existe
-        if (!fs.existsSync(exportDir)) {
-            fs.mkdirSync(exportDir, { recursive: true });
-        }
-        // Copiar plantilla antes de modificar cualquier dato
-        fs.copyFileSync(templatePath, exportPath);
-
-        // Cargar el archivo copiado con exceljs
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.readFile(exportPath);
-        const filiacionSheet = workbook.getWorksheet('FILIACIÓN');
-        if (!filiacionSheet) {
-            throw new Error("Sheet FILIACIÓN not found in template");
-        }
-
-        // Obtener los estudiantes del curso con su información personal
-        const registrations = await this.db.registration.findMany({
-            where: { course_id: courseId },
-            include: {
-                student: {
-                    include: {
-                        person: true
-                    }
-                }
-            }
-        });
-
-        // Mapear los datos de los estudiantes y separar apellidos/nombres
-        let row = 8;
-        registrations.forEach(reg => {
-            const p = reg.student.person;
-            // Unir nombre completo para separar como en el ejemplo
-            const fullName = [p.lastname, p.second_lastname, p.name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-            const nameParts = fullName.split(' ');
-            let apPaterno = '', apMaterno = '', nombres = '';
-            if (nameParts.length >= 3) {
-                apPaterno = nameParts[0];
-                apMaterno = nameParts[1];
-                nombres = nameParts.slice(2).join(' ');
-            } else if (nameParts.length === 2) {
-                apPaterno = nameParts[0];
-                nombres = nameParts[1];
-            } else {
-                nombres = nameParts[0] || '';
-            }
-            // Fecha de nacimiento
-            let birth_day = '', birth_month = '', birth_year = '', age = '';
-            if (p.birth_date) {
-                const birthDate = new Date(p.birth_date);
-                birth_day = birthDate.getDate().toString().padStart(2, '0');
-                birth_month = (birthDate.getMonth() + 1).toString().padStart(2, '0');
-                birth_year = birthDate.getFullYear().toString();
-                const today = new Date();
-                age = (today.getFullYear() - birthDate.getFullYear()).toString();
-                const m = today.getMonth() - birthDate.getMonth();
-                if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-                    age = (parseInt(age) - 1).toString();
-                }
-            }
-
-            // Escribir los valores en las celdas
-            filiacionSheet.getCell(`B${row}`).value = apPaterno;
-            filiacionSheet.getCell(`C${row}`).value = apMaterno;
-            filiacionSheet.getCell(`D${row}`).value = nombres;
-            filiacionSheet.getCell(`E${row}`).value = reg.student.rude || '';
-            filiacionSheet.getCell(`F${row}`).value = p.ci || '';
-            filiacionSheet.getCell(`G${row}`).value = birth_day;
-            filiacionSheet.getCell(`H${row}`).value = birth_month;
-            filiacionSheet.getCell(`I${row}`).value = birth_year;
-            filiacionSheet.getCell(`K${row}`).value = p.gender || '';
-
-            // Asegurarnos de que las fórmulas se mantengan
-            const nominaSheet = workbook.getWorksheet('NÓMINA');
-            if (nominaSheet) {
-                const cell = nominaSheet.getCell(`B${row}`);
-                // En lugar de intentar establecer la fórmula directamente,
-                // copiamos el valor de la celda B de la hoja FILIACIÓN
-                cell.value = filiacionSheet.getCell(`B${row}`).value;
-            }
-
-            row++;
-        });
-
-        workbook.calcProperties.fullCalcOnLoad = true;
-        await workbook.xlsx.writeFile(exportPath);
-        return { ok: true, fileName, filePath: `/public/exports/${fileName}` };
+    async exportStudentsToExcel(courseId: number, professorId: number, managementId: number) {
+        // Este método ya no es necesario, pero lo mantenemos por compatibilidad
+        // retornando una estructura vacía
+        return {
+            ok: true,
+            files: []
+        };
     }
 }
