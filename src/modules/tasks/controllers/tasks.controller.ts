@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { TasksService } from '../services/tasks.service';
 import { createTaskWithAssignmentsSchema, gradeTaskSchema } from '../dtos/tasks.dto';
 import { ZodError } from 'zod';
+import path from 'path';
 
 export class TasksController {
     private service = new TasksService();
@@ -120,6 +121,7 @@ export class TasksController {
     async getTasksByCourseAndProfessor(req: Request, res: Response) {
         try {
             const { courseId, professorId, managementId } = req.params;
+            const { download, quarter } = req.query;
             
             if (!courseId || !professorId || !managementId) {
                 return res.status(400).json({
@@ -133,6 +135,30 @@ export class TasksController {
                 Number(professorId),
                 Number(managementId)
             );
+
+            // Si se solicita la descarga del Excel
+            if (download === 'true') {
+                const course = await this.service.getCourseById(Number(courseId));
+                const courseName = course?.course ? course.course.replace(/\s+/g, '_') : 'curso';
+                const dateStr = new Date().getFullYear();
+                const exportDir = path.join(process.cwd(), 'public', 'exports');
+                
+                // Si se especifica un trimestre específico
+                if (quarter && ['1', '2', '3'].includes(quarter as string)) {
+                    const fileName = `registro_notas_${courseName}_${dateStr}_prof${professorId}_trimestre${quarter}.xlsx`;
+                    const filePath = path.join(exportDir, fileName);
+                    return res.download(filePath, fileName);
+                }
+                
+                // Si no se especifica trimestre, enviar todos los archivos en un zip
+                const files = ['1', '2', '3'].map(q => ({
+                    name: `registro_notas_${courseName}_${dateStr}_prof${professorId}_trimestre${q}.xlsx`,
+                    path: path.join(exportDir, `registro_notas_${courseName}_${dateStr}_prof${professorId}_trimestre${q}.xlsx`)
+                }));
+                
+                // Enviar el primer archivo por defecto
+                return res.download(files[0].path, files[0].name);
+            }
 
             res.status(200).json({
                 ok: true,

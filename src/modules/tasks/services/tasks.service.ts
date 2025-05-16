@@ -909,4 +909,10 @@ export class TasksService {
             files: []
         };
     }
+
+    async getCourseById(id: number) {
+        return await this.db.course.findUnique({
+            where: { id }
+        });
+    }
 }
