@@ -319,7 +319,7 @@ model Tutorship {
 }
 
 model Notifications {
-  id             Int      @id(map: "notifications_pkey") @default(autoincrement())
+  id             Int      @id @default(autoincrement()) @map("_id")
   id_person_from Int
   id_person_to   Int
   message        String
