@@ -3,9 +3,80 @@ import { CreateTaskWithAssignmentsDto, TaskAssignmentDto, GradeTaskDto } from '.
 import * as ExcelJS from 'exceljs';
 import * as path from 'path';
 import * as fs from 'fs';
+import { initializeApp } from 'firebase/app';
+import { getStorage, ref, getDownloadURL, uploadBytes } from 'firebase/storage';
+import { Readable } from 'stream';
+import axios from 'axios';
+
+// Initialize Firebase
+const firebaseConfig = {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID
+};
+
+const app = initializeApp(firebaseConfig);
+const storage = getStorage(app);
 
 export class TasksService {
     private db = Database.getInstance();
+    private exportDir = path.join(process.cwd(), 'public', 'exports');
+
+    constructor() {
+        // Create exports directory if it doesn't exist
+        if (!fs.existsSync(this.exportDir)) {
+            fs.mkdirSync(this.exportDir, { recursive: true });
+        }
+    }
+
+    // Helper method to get Excel template from Firebase
+    private async getExcelTemplate(): Promise<Buffer> {
+        try {
+            console.log('Intentando obtener la plantilla de Excel...');
+            const templateRef = ref(storage, 'template_report/plantilla_registro_notas.xlsx');
+            console.log('Obteniendo URL de descarga...');
+            const url = await getDownloadURL(templateRef);
+            console.log('URL de descarga obtenida:', url);
+            
+            // Download the file using axios
+            console.log('Descargando archivo...');
+            const response = await axios.get(url, {
+                responseType: 'arraybuffer'
+            });
+            console.log('Archivo descargado exitosamente');
+            
+            return Buffer.from(response.data);
+        } catch (error) {
+            console.error('Error detallado al obtener la plantilla Excel:', error);
+            if (error.code === 'storage/object-not-found') {
+                throw new Error('La plantilla de Excel no existe en Firebase Storage. Por favor, asegúrese de que el archivo template_report/plantilla_registro_notas.xlsx existe.');
+            }
+            throw new Error(`Error al obtener la plantilla de Excel: ${error.message}`);
+        }
+    }
+
+    // Helper method to upload report to Firebase
+    private async uploadReportToFirebase(buffer: Buffer | Uint8Array, fileName: string): Promise<string> {
+        try {
+            console.log(`Intentando subir archivo ${fileName} a Firebase...`);
+            const fileRef = ref(storage, `reports/${fileName}`);
+            console.log('Subiendo archivo...');
+            await uploadBytes(fileRef, buffer, {
+                contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            console.log('Archivo subido exitosamente');
+            console.log('Obteniendo URL de descarga...');
+            const url = await getDownloadURL(fileRef);
+            console.log('URL de descarga obtenida:', url);
+            return url;
+        } catch (error) {
+            console.error('Error detallado al subir reporte a Firebase:', error);
+            throw new Error(`Error al subir reporte a Firebase: ${error.message}`);
+        }
+    }
 
     // Helper method to determine which quarter a task belongs to
     private getTaskQuarter(taskDate: Date, management: any): number | null {
@@ -466,10 +537,13 @@ export class TasksService {
             });
         });
 
-        // Generar archivos Excel
-        await this.generateQuarterlyExcelFiles(courseId, professorId, result);
+        // Generate Excel files and return URLs
+        const reportUrls = await this.generateQuarterlyExcelFiles(courseId, professorId, result);
 
-        return result;
+        return {
+            data: result,
+            reports: reportUrls
+        };
     }
 
     private roundGrade(grade: number): number {
@@ -602,179 +676,202 @@ export class TasksService {
         return 1 - distance / maxLength;
     }
 
-    private async generateQuarterlyExcelFiles(courseId: number, professorId: number, processedData: any) {
-        const course = await this.db.course.findUnique({ where: { id: courseId } });
-        const courseName = course?.course ? course.course.replace(/\s+/g, '_') : 'curso';
-        const dateStr = new Date().getFullYear();
-        const exportDir = path.join(process.cwd(), 'public', 'exports');
-        const templatePath = path.join(process.cwd(), 'public', 'plantilla_registro_notas.xlsx');
+    async generateQuarterlyExcelFiles(courseId: number, professorId: number, processedData: any) {
+        try {
+            console.log('Iniciando generación de archivos Excel...');
+            const course = await this.db.course.findUnique({ where: { id: courseId } });
+            const courseName = course?.course ? course.course.replace(/\s+/g, '_') : 'curso';
+            const dateStr = new Date().getFullYear();
 
-        // Crear carpeta si no existe
-        if (!fs.existsSync(exportDir)) {
-            fs.mkdirSync(exportDir, { recursive: true });
-        }
+            console.log('Obteniendo plantilla Excel...');
+            // Get template from Firebase
+            const templateBuffer = await this.getExcelTemplate();
+            console.log('Plantilla obtenida exitosamente');
 
-        // Crear los archivos para cada trimestre
-        const quarterFiles = [1, 2, 3].map(quarter => {
-            const quarterFileName = `registro_notas_${courseName}_${dateStr}_prof${professorId}_trimestre${quarter}.xlsx`;
-            const quarterPath = path.join(exportDir, quarterFileName);
-            fs.copyFileSync(templatePath, quarterPath);
-            return {
-                quarter,
-                fileName: quarterFileName,
-                path: quarterPath,
-                workbook: new ExcelJS.Workbook()
+            // Create the files for each quarter
+            const quarterFiles = [1, 2, 3].map(quarter => {
+                const quarterFileName = `registro_notas_${courseName}_${dateStr}_prof${professorId}_trimestre${quarter}.xlsx`;
+                return {
+                    quarter,
+                    fileName: quarterFileName,
+                    workbook: new ExcelJS.Workbook()
+                };
+            });
+
+            console.log('Cargando workbooks desde la plantilla...');
+            // Load all workbooks from template
+            await Promise.all(quarterFiles.map(async qf => {
+                const stream = new Readable();
+                stream.push(templateBuffer);
+                stream.push(null);
+                await qf.workbook.xlsx.read(stream);
+            }));
+            console.log('Workbooks cargados exitosamente');
+
+            // Obtener los estudiantes del curso con su información personal
+            const registrations = await this.db.registration.findMany({
+                where: { course_id: courseId },
+                include: {
+                    student: {
+                        include: {
+                            person: true
+                        }
+                    }
+                },
+                orderBy: {
+                    student: {
+                        person: {
+                            lastname: 'asc'
+                        }
+                    }
+                }
+            });
+
+            // Mapear los quarters a sus claves correspondientes
+            const quarterMap = {
+                1: 'first_quarter',
+                2: 'second_quarter',
+                3: 'third_quarter'
             };
-        });
 
-        // Cargar todos los workbooks
-        await Promise.all(quarterFiles.map(qf => qf.workbook.xlsx.readFile(qf.path)));
-
-        // Obtener los estudiantes del curso con su información personal
-        const registrations = await this.db.registration.findMany({
-            where: { course_id: courseId },
-            include: {
-                student: {
-                    include: {
-                        person: true
-                    }
-                }
-            },
-            orderBy: {
-                student: {
-                    person: {
-                        lastname: 'asc'
-                    }
-                }
-            }
-        });
-
-        // Mapear los quarters a sus claves correspondientes
-        const quarterMap = {
-            1: 'first_quarter',
-            2: 'second_quarter',
-            3: 'third_quarter'
-        };
-
-        // Procesar cada archivo trimestral
-        for (const quarterFile of quarterFiles) {
-            const filiacionSheet = quarterFile.workbook.getWorksheet('FILIACIÓN');
-            const evalSheet = quarterFile.workbook.getWorksheet('EVAL SER Y DECIDIR');
-            const autoEvalSheet = quarterFile.workbook.getWorksheet('AUTOEVALUACIÓN');
-            
-            if (!filiacionSheet || !evalSheet || !autoEvalSheet) {
-                throw new Error(`Required sheets not found in trimestre${quarterFile.quarter} file`);
-            }
-
-            // Llenar datos de FILIACIÓN
-            let row = 8;
-            for (const reg of registrations) {
-                const p = reg.student.person;
-                const fullName = [p.lastname, p.second_lastname, p.name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-                const nameParts = fullName.split(' ');
-                let apPaterno = '', apMaterno = '', nombres = '';
+            // Procesar cada archivo trimestral
+            for (const quarterFile of quarterFiles) {
+                const filiacionSheet = quarterFile.workbook.getWorksheet('FILIACIÓN');
+                const evalSheet = quarterFile.workbook.getWorksheet('EVAL SER Y DECIDIR');
+                const autoEvalSheet = quarterFile.workbook.getWorksheet('AUTOEVALUACIÓN');
                 
-                if (nameParts.length >= 3) {
-                    apPaterno = nameParts[0];
-                    apMaterno = nameParts[1];
-                    nombres = nameParts.slice(2).join(' ');
-                } else if (nameParts.length === 2) {
-                    apPaterno = nameParts[0];
-                    nombres = nameParts[1];
-                } else {
-                    nombres = nameParts[0] || '';
+                if (!filiacionSheet || !evalSheet || !autoEvalSheet) {
+                    throw new Error(`Hojas requeridas no encontradas en el archivo del trimestre ${quarterFile.quarter}`);
                 }
 
-                // Escribir datos de filiación
-                filiacionSheet.getCell(`B${row}`).value = apPaterno;
-                filiacionSheet.getCell(`C${row}`).value = apMaterno;
-                filiacionSheet.getCell(`D${row}`).value = nombres;
-                filiacionSheet.getCell(`E${row}`).value = reg.student.rude || '';
-                filiacionSheet.getCell(`F${row}`).value = p.ci || '';
-                if (p.birth_date) {
-                    const birthDate = new Date(p.birth_date);
-                    filiacionSheet.getCell(`G${row}`).value = birthDate.getDate().toString().padStart(2, '0');
-                    filiacionSheet.getCell(`H${row}`).value = (birthDate.getMonth() + 1).toString().padStart(2, '0');
-                    filiacionSheet.getCell(`I${row}`).value = birthDate.getFullYear().toString();
-                }
-                filiacionSheet.getCell(`K${row}`).value = p.gender || '';
-
-                // Obtener datos del estudiante para este trimestre
-                const quarterKey = quarterMap[quarterFile.quarter];
-                const quarterData = processedData[quarterKey];
-
-                // Pintar SER y DECIDIR del trimestre
-                const serDecidirData = quarterData.ser_decidir[reg.student.id];
-                if (serDecidirData) {
-                    // Pintar SER
-                    if (serDecidirData.dimensions[1]?.average !== null) {
-                        const serColumn = this.serDecidirColumns.ser[quarterFile.quarter];
-                        evalSheet.getCell(`${serColumn}${row}`).value = this.roundGrade(serDecidirData.dimensions[1].average);
+                // Llenar datos de FILIACIÓN
+                let row = 8;
+                for (const reg of registrations) {
+                    const p = reg.student.person;
+                    const fullName = [p.lastname, p.second_lastname, p.name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+                    const nameParts = fullName.split(' ');
+                    let apPaterno = '', apMaterno = '', nombres = '';
+                    
+                    if (nameParts.length >= 3) {
+                        apPaterno = nameParts[0];
+                        apMaterno = nameParts[1];
+                        nombres = nameParts.slice(2).join(' ');
+                    } else if (nameParts.length === 2) {
+                        apPaterno = nameParts[0];
+                        nombres = nameParts[1];
+                    } else {
+                        nombres = nameParts[0] || '';
                     }
 
-                    // Pintar DECIDIR
-                    if (serDecidirData.dimensions[4]?.average !== null) {
-                        const decidirColumn = this.serDecidirColumns.decidir[quarterFile.quarter];
-                        evalSheet.getCell(`${decidirColumn}${row}`).value = this.roundGrade(serDecidirData.dimensions[4].average);
+                    // Escribir datos de filiación
+                    filiacionSheet.getCell(`B${row}`).value = apPaterno;
+                    filiacionSheet.getCell(`C${row}`).value = apMaterno;
+                    filiacionSheet.getCell(`D${row}`).value = nombres;
+                    filiacionSheet.getCell(`E${row}`).value = reg.student.rude || '';
+                    filiacionSheet.getCell(`F${row}`).value = p.ci || '';
+                    if (p.birth_date) {
+                        const birthDate = new Date(p.birth_date);
+                        filiacionSheet.getCell(`G${row}`).value = birthDate.getDate().toString().padStart(2, '0');
+                        filiacionSheet.getCell(`H${row}`).value = (birthDate.getMonth() + 1).toString().padStart(2, '0');
+                        filiacionSheet.getCell(`I${row}`).value = birthDate.getFullYear().toString();
+                    }
+                    filiacionSheet.getCell(`K${row}`).value = p.gender || '';
+
+                    // Obtener datos del estudiante para este trimestre
+                    const quarterKey = quarterMap[quarterFile.quarter];
+                    const quarterData = processedData[quarterKey];
+
+                    if (quarterData && quarterData.ser_decidir && quarterData.ser_decidir[reg.student.id]) {
+                        // Pintar SER
+                        const serData = quarterData.ser_decidir[reg.student.id].dimensions[1];
+                        if (serData?.average !== null) {
+                            const serColumn = this.serDecidirColumns.ser[quarterFile.quarter];
+                            evalSheet.getCell(`${serColumn}${row}`).value = this.roundGrade(serData.average);
+                        }
+
+                        // Pintar DECIDIR
+                        const decidirData = quarterData.ser_decidir[reg.student.id].dimensions[4];
+                        if (decidirData?.average !== null) {
+                            const decidirColumn = this.serDecidirColumns.decidir[quarterFile.quarter];
+                            evalSheet.getCell(`${decidirColumn}${row}`).value = this.roundGrade(decidirData.average);
+                        }
+
+                        // Pintar AUTOEVALUACIÓN
+                        const autoEvalData = quarterData.ser_decidir[reg.student.id].dimensions[5];
+                        if (autoEvalData?.average !== null) {
+                            autoEvalSheet.getCell(`${this.autoevaluacionColumn}${row}`).value = 
+                                this.roundGrade(autoEvalData.average);
+                        }
                     }
 
-                    // Pintar AUTOEVALUACIÓN en su propia hoja
-                    if (serDecidirData.dimensions[5]?.average !== null) {
-                        autoEvalSheet.getCell(`${this.autoevaluacionColumn}${row}`).value = 
-                            this.roundGrade(serDecidirData.dimensions[5].average);
+                    // Pintar SABER y HACER por materia
+                    if (quarterData && quarterData.students && quarterData.students[reg.student.id]) {
+                        const studentData = quarterData.students[reg.student.id];
+                        if (studentData.subjects) {
+                            Object.entries(studentData.subjects).forEach(([_, subject]: [string, any]) => {
+                                const excelSheetName = this.findMatchingSubject(subject.subjectName);
+                                if (!excelSheetName) return;
+
+                                const subjectSheet = quarterFile.workbook.getWorksheet(excelSheetName);
+                                if (!subjectSheet) return;
+
+                                const columns = this.columnConfig[excelSheetName];
+                                if (!columns) return;
+
+                                let saberColumnIndex = 0;
+                                let hacerColumnIndex = 0;
+
+                                // Ordenar los meses para asegurar que se pinten en orden
+                                const sortedMonths = Object.entries(subject.months).sort((a, b) => {
+                                    const monthOrder = {
+                                        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+                                        'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+                                        'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+                                    };
+                                    return monthOrder[a[0]] - monthOrder[b[0]];
+                                });
+
+                                sortedMonths.forEach(([_, monthData]: [string, any]) => {
+                                    // Pintar promedio SABER
+                                    if (monthData.dimensions[2]?.average !== null && saberColumnIndex < columns.saber.length) {
+                                        const saberColumn = columns.saber[saberColumnIndex];
+                                        subjectSheet.getCell(`${saberColumn}${row}`).value = this.roundGrade(monthData.dimensions[2].average);
+                                        saberColumnIndex++;
+                                    }
+
+                                    // Pintar promedio HACER
+                                    if (monthData.dimensions[3]?.average !== null && hacerColumnIndex < columns.hacer.length) {
+                                        const hacerColumn = columns.hacer[hacerColumnIndex];
+                                        subjectSheet.getCell(`${hacerColumn}${row}`).value = this.roundGrade(monthData.dimensions[3].average);
+                                        hacerColumnIndex++;
+                                    }
+                                });
+                            });
+                        }
                     }
+
+                    row++;
                 }
-
-                // Pintar SABER y HACER por materia
-                const studentData = quarterData.students[reg.student.id];
-                if (studentData?.subjects) {
-                    Object.entries(studentData.subjects).forEach(([_, subject]: [string, any]) => {
-                        const excelSheetName = this.findMatchingSubject(subject.subjectName);
-                        if (!excelSheetName) return;
-
-                        const subjectSheet = quarterFile.workbook.getWorksheet(excelSheetName);
-                        if (!subjectSheet) return;
-
-                        const columns = this.columnConfig[excelSheetName];
-                        if (!columns) return;
-
-                        let saberColumnIndex = 0;
-                        let hacerColumnIndex = 0;
-
-                        // Ordenar los meses para asegurar que se pinten en orden
-                        const sortedMonths = Object.entries(subject.months).sort((a, b) => {
-                            const monthOrder = {
-                                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
-                                'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
-                                'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
-                            };
-                            return monthOrder[a[0]] - monthOrder[b[0]];
-                        });
-
-                        sortedMonths.forEach(([_, monthData]: [string, any]) => {
-                            // Pintar promedio SABER
-                            if (monthData.dimensions[2]?.average !== null && saberColumnIndex < columns.saber.length) {
-                                const saberColumn = columns.saber[saberColumnIndex];
-                                subjectSheet.getCell(`${saberColumn}${row}`).value = this.roundGrade(monthData.dimensions[2].average);
-                                saberColumnIndex++;
-                            }
-
-                            // Pintar promedio HACER
-                            if (monthData.dimensions[3]?.average !== null && hacerColumnIndex < columns.hacer.length) {
-                                const hacerColumn = columns.hacer[hacerColumnIndex];
-                                subjectSheet.getCell(`${hacerColumn}${row}`).value = this.roundGrade(monthData.dimensions[3].average);
-                                hacerColumnIndex++;
-                            }
-                        });
-                    });
-                }
-
-                row++;
             }
-        }
 
-        // Guardar todos los archivos
-        await Promise.all(quarterFiles.map(qf => qf.workbook.xlsx.writeFile(qf.path)));
+            console.log('Guardando archivos en Firebase...');
+            // Save all files to Firebase and return URLs directly
+            const reportUrls = await Promise.all(quarterFiles.map(async qf => {
+                const buffer = await qf.workbook.xlsx.writeBuffer();
+                const url = await this.uploadReportToFirebase(new Uint8Array(buffer), qf.fileName);
+                return {
+                    quarter: qf.quarter,
+                    fileName: qf.fileName,
+                    url: url
+                };
+            }));
+            console.log('Archivos guardados exitosamente');
+
+            return reportUrls;
+        } catch (error) {
+            console.error('Error detallado en generateQuarterlyExcelFiles:', error);
+            throw new Error(`Error al generar los archivos Excel: ${error.message}`);
+        }
     }
 
     async getTaskByIdWithAssignments(taskId: number, studentId: number) {
