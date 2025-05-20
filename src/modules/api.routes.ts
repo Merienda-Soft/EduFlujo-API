@@ -8,6 +8,7 @@ import courseRouter from './course/routes';
 import assignmentRouter from './assignment/routes';
 import subjectRouter from './subject/routes';
 import registrationRouter from './registration/routes';
+import notificationRouter from './notifications/routes/notification.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/assignment', assignmentRouter);
 router.use('/subject', subjectRouter);
 router.use('/content', contentRouter);
 router.use('/registration', registrationRouter);
+router.use('/notifications', notificationRouter);
 
 export default router;

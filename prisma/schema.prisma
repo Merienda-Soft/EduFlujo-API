@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,126 +7,125 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model Assignment {
   id            Int         @id @default(autoincrement()) @map("_id")
-  quarter         String?
-  status          Int?
-  course   Course? @relation(fields: [course_id], references: [id])
-  course_id Int?
-  professor     Professor?  @relation(fields: [professor_id], references: [id])
+  quarter       String?
+  status        Int?
+  course_id     Int?
   professor_id  Int?
-  management     Management?  @relation(fields: [management_id], references: [id])
-  management_id  Int?
-  subject     Subject?  @relation(fields: [subject_id], references: [id])
-  subject_id  Int?
+  management_id Int?
+  subject_id    Int?
+  course        Course?     @relation(fields: [course_id], references: [id])
+  management    Management? @relation(fields: [management_id], references: [id])
+  professor     Professor?  @relation(fields: [professor_id], references: [id])
+  subject       Subject?    @relation(fields: [subject_id], references: [id])
 }
 
 model Attendance {
-  id              Int       @id @default(autoincrement()) @map("_id")
+  id              Int                @id @default(autoincrement()) @map("_id")
   attendance_date DateTime?
-  quarter         String? 
-  management      Management? @relation(fields: [management_id], references: [id])
-  management_id   Int?   
-  subject         Subject?   @relation(fields: [subject_id], references: [id])
-  subject_id      Int? 
-  professor       Professor? @relation(fields: [professor_id], references: [id])
+  quarter         String?
+  management_id   Int?
+  subject_id      Int?
   professor_id    Int?
-  course        Course?   @relation(fields: [course_id], references: [id])
-  course_id     Int?
-  attendances AttendanceRecord[]
+  course_id       Int?
+  course          Course?            @relation(fields: [course_id], references: [id])
+  management      Management?        @relation(fields: [management_id], references: [id])
+  professor       Professor?         @relation(fields: [professor_id], references: [id])
+  subject         Subject?           @relation(fields: [subject_id], references: [id])
+  attendances     AttendanceRecord[]
 }
 
 model AttendanceRecord {
-  attendance         Attendance   @relation(fields: [attendance_id], references: [id])
-  attendance_id      Int
-  student            Student      @relation(fields: [student_id], references: [id])
-  student_id         Int
-  status_attendance  String?      @db.Char(10)   
+  attendance_id     Int
+  student_id        Int
+  status_attendance String?    @db.Char(10)
+  attendance        Attendance @relation(fields: [attendance_id], references: [id])
+  student           Student    @relation(fields: [student_id], references: [id])
 
   @@id([attendance_id, student_id])
 }
 
 model Content {
-  id            Int       @id @default(autoincrement()) @map("_id")
-  course   Course? @relation(fields: [course_id], references: [id])
-  course_id Int?
-  subject       Subject?   @relation(fields: [subject_id], references: [id])
+  id            Int         @id @default(autoincrement()) @map("_id")
+  course_id     Int?
   subject_id    Int?
-  management      Management? @relation(fields: [management_id], references: [id])
-  management_id   Int?
-  file          Json?     // Array de archivos con nombre y URL
-  submitted_at   DateTime?   @default(now())
-  last_update    DateTime?   @default(now())
+  management_id Int?
+  file          Json?
+  submitted_at  DateTime?   @default(now())
+  last_update   DateTime?   @default(now())
+  course        Course?     @relation(fields: [course_id], references: [id])
+  management    Management? @relation(fields: [management_id], references: [id])
+  subject       Subject?    @relation(fields: [subject_id], references: [id])
 }
 
 model Course {
-  id          Int         @id @default(autoincrement()) @map("_id")
-  parallel    String?     @db.Char(10)
-  course      String?     
-  last_update DateTime?
-  status      Int?
-  degree      Degree?     @relation(fields: [degree_id], references: [id])
-  degree_id   Int?
-  management    Management? @relation(fields: [management_id], references: [id])
+  id            Int            @id @default(autoincrement()) @map("_id")
+  parallel      String?        @db.Char(10)
+  course        String?
+  last_update   DateTime?
+  status        Int?
+  degree_id     Int?
   management_id Int?
-  curriculums    Curriculum[]
-  attendances Attendance[]
-  tasks       Task[]
   assignments   Assignment[]
+  attendances   Attendance[]
   contents      Content[]
-  marks       Mark[]
-  registrations   Registration[]
+  degree        Degree?        @relation(fields: [degree_id], references: [id])
+  management    Management?    @relation(fields: [management_id], references: [id])
+  curriculums   Curriculum[]
+  marks         Mark[]
   marks_subject MarkSubject[]
+  registrations Registration[]
+  tasks         Task[]
 }
 
 model Degree {
-  id     Int     @id @default(autoincrement()) @map("_id")
-  degree String? 
+  id      Int      @id @default(autoincrement()) @map("_id")
+  degree  String?
   courses Course[]
 }
 
 model Departament {
   id          Int        @id @default(autoincrement()) @map("_id")
-  departament String?    
-  country    Country?  @relation(fields: [country_id], references: [id])
-  country_id Int?
-  provinces     Province[]
+  departament String?
+  country_id  Int?
+  country     Country?   @relation(fields: [country_id], references: [id])
+  provinces   Province[]
 }
 
 model Dimension {
   id        Int     @id @default(autoincrement()) @map("_id")
-  dimension String? 
+  dimension String?
   value     Int?
-  tasks Task[]
+  tasks     Task[]
 }
 
 model Mark {
-  id            Int       @id @default(autoincrement()) @map("_id")
-  total     Int?
-  student       Student?  @relation(fields: [student_id], references: [id])
+  id            Int         @id @default(autoincrement()) @map("_id")
+  total         Int?
   student_id    Int?
-  course    Course?  @relation(fields: [course_id], references: [id])
-  course_id Int?
-  management       Management? @relation(fields: [management_id], references: [id])
-  management_id    Int?
+  course_id     Int?
+  management_id Int?
+  course        Course?     @relation(fields: [course_id], references: [id])
+  management    Management? @relation(fields: [management_id], references: [id])
+  student       Student?    @relation(fields: [student_id], references: [id])
 }
 
 model MarkSubject {
-  id            Int       @id @default(autoincrement()) @map("_id")
-  mark_subject        Int?
-  student       Student?  @relation(fields: [student_id], references: [id])
+  id            Int         @id @default(autoincrement()) @map("_id")
+  mark_subject  Int?
   student_id    Int?
-  course    Course?  @relation(fields: [course_id], references: [id])
-  course_id Int?
-  subject     Subject? @relation(fields: [subject_id], references: [id])
+  course_id     Int?
   subject_id    Int?
-  management       Management? @relation(fields: [management_id], references: [id])
-  management_id    Int?
+  management_id Int?
+  course        Course?     @relation(fields: [course_id], references: [id])
+  management    Management? @relation(fields: [management_id], references: [id])
+  student       Student?    @relation(fields: [student_id], references: [id])
+  subject       Subject?    @relation(fields: [subject_id], references: [id])
 }
 
 model Management {
-  id                   Int       @id @default(autoincrement()) @map("_id")
+  id                   Int            @id @default(autoincrement()) @map("_id")
   management           Int?
   status               Int?
   start_date           DateTime?
@@ -140,190 +133,197 @@ model Management {
   first_quarter_start  DateTime?
   first_quarter_end    DateTime?
   second_quarter_start DateTime?
-  second_quarter_end   DateTime? 
-  third_quarter_start  DateTime?   
-  third_quarter_end    DateTime? 
-  courses         Course[]
-  attendances         Attendance[]
-  tasks     Task[]
-  curriculums    Curriculum[]
-  marks       Mark[]
-  marks_subject MarkSubject[]
-  contents      Content[]
-  registrations   Registration[]
-  assignments   Assignment[]
+  second_quarter_end   DateTime?
+  third_quarter_start  DateTime?
+  third_quarter_end    DateTime?
+  assignments          Assignment[]
+  attendances          Attendance[]
+  contents             Content[]
+  courses              Course[]
+  curriculums          Curriculum[]
+  marks                Mark[]
+  marks_subject        MarkSubject[]
+  registrations        Registration[]
+  tasks                Task[]
 }
 
 model Person {
-  id               Int        @id @default(autoincrement()) @map("_id")
-  name             String?    
-  lastname         String?    
-  second_lastname  String?    
-  gender           String?    @db.Char(10)
-  ci               String?    
-  birth_date       DateTime?
-  email            String?    
-  temp_password    String?
-  status           Int?
-  town         Town?        @relation(fields: [town_id], references: [id])
-  town_id      Int?
-  professor        Professor?
-  student          Student?
-  tutor            Tutor?
+  id              Int        @id @default(autoincrement()) @map("_id")
+  name            String?
+  lastname        String?
+  second_lastname String?
+  gender          String?    @db.Char(10)
+  ci              String?
+  birth_date      DateTime?
+  email           String?
+  temp_password   String?
+  status          Int?
+  town_id         Int?
+  town            Town?      @relation(fields: [town_id], references: [id])
+  professor       Professor?
+  student         Student?
+  tutor           Tutor?
 }
 
 model Professor {
-  id          Int       @id 
+  id          Int          @id
   is_tecnical Int?
-  subjects    String?   
+  subjects    String?
   status      Int?
-  person      Person    @relation(fields: [id], references: [id]) 
   assignments Assignment[]
   attendances Attendance[]
-  tasks Task[]
+  person      Person       @relation(fields: [id], references: [id])
+  tasks       Task[]
 }
 
 model Province {
-  id           Int          @id @default(autoincrement()) @map("_id")
-  province     String?      
-  departament         Departament?        @relation(fields: [departament_id], references: [id])
-  departament_id      Int?
-  towns   Town[]
+  id             Int          @id @default(autoincrement()) @map("_id")
+  province       String?
+  departament_id Int?
+  departament    Departament? @relation(fields: [departament_id], references: [id])
+  towns          Town[]
 }
 
 model Registration {
-  id            Int       @id @default(autoincrement()) @map("_id")
-  course   Course? @relation(fields: [course_id], references: [id])
-  course_id Int?
-  student       Student?    @relation(fields: [student_id], references: [id])
+  id            Int         @id @default(autoincrement()) @map("_id")
+  course_id     Int?
   student_id    Int?
-  management       Management? @relation(fields: [management_id], references: [id])
-  management_id    Int?
+  management_id Int?
+  course        Course?     @relation(fields: [course_id], references: [id])
+  management    Management? @relation(fields: [management_id], references: [id])
+  student       Student?    @relation(fields: [student_id], references: [id])
 }
 
 model Setting {
   id                Int     @id @default(autoincrement())
-  institution_logo  String? 
-  institution_name  String? 
+  institution_logo  String?
+  institution_name  String?
   active_management Int?
   management_id     Int?
   tutor_access      Int?
-  active_quarter    String? 
+  active_quarter    String?
 }
 
 model Student {
-  id        Int       @id 
-  matricula String?   
-  rude      String?
-  person    Person    @relation(fields: [id], references: [id])
-  attendances AttendanceRecord[]
-  registrations Registration[]
+  id              Int                @id
+  matricula       String?
+  rude            String?
+  attendances     AttendanceRecord[]
+  marks           Mark[]
+  marks_subject   MarkSubject[]
+  registrations   Registration[]
+  person          Person             @relation(fields: [id], references: [id])
   taskAssignments TaskAssignment[]
-  tutors    Tutorship[]  
-  marks     Mark[]
-  marks_subject MarkSubject[]
+  tutors          Tutorship[]
 }
 
 model Subject {
-  id          Int       @id @default(autoincrement()) @map("_id")
-  subject     String?   
+  id          Int           @id @default(autoincrement()) @map("_id")
+  subject     String?
   is_tecnical Int?
   status      Int?
+  assignments Assignment[]
   attendances Attendance[]
   contents    Content[]
-  tasks Task[]
-  assignments Assignment[]
   curriculums Curriculum[]
   marks       MarkSubject[]
+  tasks       Task[]
 }
 
 model Curriculum {
-  id          Int       @id @default(autoincrement()) @map("_id")
-  course      Course?   @relation(fields: [course_id], references: [id])
-  course_id   Int?
-  subject      Subject?   @relation(fields: [subject_id], references: [id])
-  subject_id   Int?
-  management    Management? @relation(fields: [management_id], references: [id])
+  id            Int         @id @default(autoincrement()) @map("_id")
+  course_id     Int?
+  subject_id    Int?
   management_id Int?
+  course        Course?     @relation(fields: [course_id], references: [id])
+  management    Management? @relation(fields: [management_id], references: [id])
+  subject       Subject?    @relation(fields: [subject_id], references: [id])
 }
 
 model Task {
-  id          Int       @id @default(autoincrement()) @map("_id")
-  name        String?
-  description String?
-  weight           Int?
+  id                Int              @id @default(autoincrement()) @map("_id")
+  name              String?
+  description       String?
+  weight            Int?
   is_autoevaluation Int?
-  dimension   Dimension @relation(fields: [dimension_id], references: [id])
-  dimension_id Int
-  management       Management? @relation(fields: [management_id], references: [id])
-  management_id    Int?
-  professor        Professor?  @relation(fields: [professor_id], references: [id])
-  professor_id     Int?
-  subject          Subject?    @relation(fields: [subject_id], references: [id])
-  subject_id       Int?
-  course        Course?   @relation(fields: [course_id], references: [id])
-  course_id     Int?
-  quarter          String?
-  type   Int?  @default(0) // 0: Para entregar, 1: Solo evaluacion
-  status           Int? // 0: Eliminado, 1: Activo
-  create_date DateTime? @default(now())
-  last_update DateTime?
-  deleted_at DateTime?
-  start_date  DateTime?
-  end_date    DateTime?
-  assignments TaskAssignment[]
+  dimension_id      Int
+  management_id     Int?
+  professor_id      Int?
+  subject_id        Int?
+  course_id         Int?
+  quarter           String?
+  type              Int?             @default(0)
+  status            Int?
+  create_date       DateTime?        @default(now())
+  last_update       DateTime?
+  deleted_at        DateTime?
+  start_date        DateTime?
+  end_date          DateTime?
+  course            Course?          @relation(fields: [course_id], references: [id])
+  dimension         Dimension        @relation(fields: [dimension_id], references: [id])
+  management        Management?      @relation(fields: [management_id], references: [id])
+  professor         Professor?       @relation(fields: [professor_id], references: [id])
+  subject           Subject?         @relation(fields: [subject_id], references: [id])
+  assignments       TaskAssignment[]
 }
 
 model TaskAssignment {
-  task             Task        @relation(fields: [task_id], references: [id])
-  task_id          Int
-  student          Student    @relation(fields: [student_id], references: [id])
-  student_id       Int
-  status           Int?   @default(0)// 0: Activo, 1: Entregado, 2: Evaluado
-  qualification    String?     @db.Char(10)
-  assigned_date    DateTime?   @default(now())
-  completed_date   DateTime?
-  files            Json?       // Array de archivos con nombre y URL
-  submitted_at     DateTime?   @default(now())
-  last_update      DateTime?
-  comment          String?  // for leave a comment about task
+  task_id        Int
+  student_id     Int
+  status         Int?      @default(0)
+  qualification  String?   @db.Char(10)
+  assigned_date  DateTime? @default(now())
+  completed_date DateTime?
+  files          Json?
+  submitted_at   DateTime? @default(now())
+  last_update    DateTime?
+  comment        String?
+  student        Student   @relation(fields: [student_id], references: [id])
+  task           Task      @relation(fields: [task_id], references: [id])
 
   @@id([task_id, student_id])
 }
 
 model Town {
-  id      Int      @id @default(autoincrement()) @map("_id")
-  town    String?  
-  province         Province?        @relation(fields: [province_id], references: [id])
-  province_id      Int?
-  persons   Person[]
+  id          Int       @id @default(autoincrement()) @map("_id")
+  town        String?
+  province_id Int?
+  persons     Person[]
+  province    Province? @relation(fields: [province_id], references: [id])
 }
 
 model Country {
-  id      Int      @id @default(autoincrement()) @map("_id")
-  country    String?  
-  departaments   Departament[]
+  id           Int           @id @default(autoincrement()) @map("_id")
+  country      String?
+  departaments Departament[]
 }
 
 model Tutor {
-  id        Int       @id  
-  status    Int?
-  person    Person    @relation(fields: [id], references: [id])
+  id             Int         @id
+  status         Int?
   url_imagefront String?
   url_imageback  String?
-  students  Tutorship[] 
+  person         Person      @relation(fields: [id], references: [id])
+  students       Tutorship[]
 }
 
 model Tutorship {
-  tutor      Tutor     @relation(fields: [tutor_id], references: [id])
   tutor_id   Int
-  student    Student   @relation(fields: [student_id], references: [id])
   student_id Int
-  relacion   String    // "padre", "madre", "apoderado", etc.
-  createdAt  DateTime  @default(now())
+  relacion   String
+  createdAt  DateTime @default(now())
+  student    Student  @relation(fields: [student_id], references: [id])
+  tutor      Tutor    @relation(fields: [tutor_id], references: [id])
 
   @@id([tutor_id, student_id])
 }
 
-
-
+model Notifications {
+  id             Int      @id(map: "notifications_pkey") @default(autoincrement())
+  id_person_from Int
+  id_person_to   Int
+  message        String
+  created_date   DateTime @default(now()) @db.Timestamp(6)
+  status         Int      @default(0)
+  updated_at     DateTime @default(now()) @db.Timestamp(6)
+}

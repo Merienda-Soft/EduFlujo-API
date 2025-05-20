@@ -112,7 +112,10 @@ export class TasksController {
         try {
             const { professorId, courseId, subjectId, managementId } = req.params;
             const result = await this.service.getTasksByProfessorCourseSubjectManagement(Number(professorId), Number(courseId), Number(subjectId), Number(managementId));
-            res.status(200).json(result);
+            res.status(200).json({
+                ok: true,
+                data: result
+            });
         } catch (error) {
             this.handleError(res, error);
         }

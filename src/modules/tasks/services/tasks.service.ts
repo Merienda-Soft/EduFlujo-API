@@ -40,94 +40,75 @@ export class TasksService {
     }
 
     async createTask(data: CreateTaskWithAssignmentsDto) {
-        const { task, assignments = [] } = data;
-
         return await this.db.$transaction(async (tx) => {
-            // Si no hay assignments específicos, obtener todos los estudiantes del curso
-            let studentsToAssign = assignments;
-            
-            if (assignments.length === 0) {
-                const registrations = await tx.registration.findMany({
-                    where: {
-                        course_id: task.course_id,
-                        management_id: task.management_id
-                    },
-                    select: {
-                        student_id: true
-                    }
-                });
-                studentsToAssign = registrations.map(reg => ({
-                    student_id: reg.student_id,
-                    assigned_date: new Date()
-                }));
-            }
-
-            // Crear la tarea
-            const createdTask = await tx.task.create({
+            const task = await tx.task.create({
                 data: {
-                    name: task.name,
-                    description: task.description,
-                    weight: task.weight,
-                    is_autoevaluation: task.is_autoevaluation,
-                    quarter: task.quarter,
-                    start_date: task.start_date,
-                    end_date: task.end_date,
-                    create_date: new Date(),
-                    last_update: new Date(),
-                    type: task.type,
-                    status: 1,
-                    dimension: {
-                        connect: { id: task.dimension_id }
-                    },
-                    management: {
-                        connect: { id: task.management_id }
-                    },
-                    professor: {
-                        connect: { id: task.professor_id }
-                    },
-                    subject: {
-                        connect: { id: task.subject_id }
-                    },
-                    course: {
-                        connect: { id: task.course_id }
-                    }
+                    name: data.task.name,
+                    description: data.task.description,
+                    dimension_id: data.task.dimension_id,
+                    management_id: data.task.management_id,
+                    professor_id: data.task.professor_id,
+                    subject_id: data.task.subject_id,
+                    course_id: data.task.course_id,
+                    weight: data.task.weight,
+                    is_autoevaluation: data.task.is_autoevaluation || 0,
+                    quarter: data.task.quarter,
+                    type: data.task.type,
+                    start_date: data.task.start_date,
+                    end_date: data.task.end_date,
+                    status: 1
                 }
             });
 
-            // Crear las asignaciones
-            const assignmentPromises = studentsToAssign.map(student =>
+            // Obtener estudiantes del curso
+            const students = await tx.student.findMany({
+                where: {
+                    registrations: {
+                        some: {
+                            course_id: data.task.course_id,
+                            management_id: data.task.management_id
+                        }
+                    }
+                },
+                include: {
+                    person: true
+                }
+            });
+
+            // Crear asignaciones y notificaciones en paralelo
+            const assignmentPromises = students.map(student => 
                 tx.taskAssignment.create({
                     data: {
-                        task_id: createdTask.id,
-                        student_id: student.student_id,
-                        assigned_date: student.assigned_date
+                        task_id: task.id,
+                        student_id: student.id,
+                        status: 0
                     }
                 })
             );
 
-            await Promise.all(assignmentPromises);
+            const notificationPromises = students.map(student =>
+                tx.notifications.create({
+                    data: {
+                        id_person_from: data.task.professor_id,
+                        id_person_to: student.person.id,
+                        message: `Nueva tarea: "${data.task.name}" en la materia ${data.task.subject_id} del curso ${data.task.course_id}. Fecha de entrega: ${new Date(data.task.end_date).toLocaleDateString()}`
+                    }
+                })
+            );
 
+            // Ejecutar todas las promesas en paralelo
+            await Promise.all([...assignmentPromises, ...notificationPromises]);
+
+            // Retornar la tarea creada con sus relaciones
             return await tx.task.findUnique({
-                where: { id: createdTask.id },
+                where: { id: task.id },
                 include: {
-                    assignments: {
-                        include: {
-                            student: {
-                                include: {
-                                    person: true
-                                }
-                            }
-                        }
-                    },
-                    professor: {
-                        include: { person: true }
-                    },
-                    subject: true,
                     dimension: true,
-                    course: true,
-                    management: true
+                    subject: true
                 }
             });
+        }, {
+            timeout: 10000 // Aumentar el timeout a 10 segundos
         });
     }
 
@@ -273,7 +254,14 @@ export class TasksService {
     }
 
     async getTasksByProfessorCourseSubjectManagement(professorId: number, courseId: number, subjectId: number, managementId: number) {
-        return await this.db.task.findMany({
+        console.log('Filtro de búsqueda:', {
+            status: 1,
+            professor_id: professorId,
+            course_id: courseId,
+            subject_id: subjectId,
+            management_id: managementId
+        });
+        const result = await this.db.task.findMany({
             where: {
                 status: 1,
                 professor_id: professorId,
@@ -292,6 +280,8 @@ export class TasksService {
                 }
             }
         });
+        console.log('Resultado de la consulta:', result);
+        return result;
     }
 
     async getTasksByCourseAndProfessor(courseId: number, professorId: number, managementId: number) {
