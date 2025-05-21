@@ -547,11 +547,13 @@ export class TasksService {
     }
 
     private roundGrade(grade: number): number {
-        const decimalPart = grade % 1;
-        if (decimalPart >= 0.5) {
-            return Math.ceil(grade);
+        if (grade === null || grade === undefined || isNaN(grade)) {
+            return 0;
         }
-        return Math.floor(grade);
+        // Redondear a 2 decimales primero
+        const roundedToTwoDecimals = Number((Math.round(grade * 100) / 100).toFixed(2));
+        // Luego redondear al entero más cercano si es necesario
+        return Math.round(roundedToTwoDecimals);
     }
 
     // Subject name mapping configuration
@@ -784,23 +786,28 @@ export class TasksService {
                     if (quarterData && quarterData.ser_decidir && quarterData.ser_decidir[reg.student.id]) {
                         // Pintar SER
                         const serData = quarterData.ser_decidir[reg.student.id].dimensions[1];
-                        if (serData?.average !== null) {
+                        if (serData?.average !== null && serData?.average !== undefined) {
                             const serColumn = this.serDecidirColumns.ser[quarterFile.quarter];
-                            evalSheet.getCell(`${serColumn}${row}`).value = this.roundGrade(serData.average);
+                            const roundedSerGrade = this.roundGrade(serData.average);
+                            console.log(`Pintando SER para estudiante ${reg.student.id}: ${serData.average} -> ${roundedSerGrade}`);
+                            evalSheet.getCell(`${serColumn}${row}`).value = roundedSerGrade;
                         }
 
                         // Pintar DECIDIR
                         const decidirData = quarterData.ser_decidir[reg.student.id].dimensions[4];
-                        if (decidirData?.average !== null) {
+                        if (decidirData?.average !== null && decidirData?.average !== undefined) {
                             const decidirColumn = this.serDecidirColumns.decidir[quarterFile.quarter];
-                            evalSheet.getCell(`${decidirColumn}${row}`).value = this.roundGrade(decidirData.average);
+                            const roundedDecidirGrade = this.roundGrade(decidirData.average);
+                            console.log(`Pintando DECIDIR para estudiante ${reg.student.id}: ${decidirData.average} -> ${roundedDecidirGrade}`);
+                            evalSheet.getCell(`${decidirColumn}${row}`).value = roundedDecidirGrade;
                         }
 
                         // Pintar AUTOEVALUACIÓN
                         const autoEvalData = quarterData.ser_decidir[reg.student.id].dimensions[5];
-                        if (autoEvalData?.average !== null) {
-                            autoEvalSheet.getCell(`${this.autoevaluacionColumn}${row}`).value = 
-                                this.roundGrade(autoEvalData.average);
+                        if (autoEvalData?.average !== null && autoEvalData?.average !== undefined) {
+                            const roundedAutoEvalGrade = this.roundGrade(autoEvalData.average);
+                            console.log(`Pintando AUTOEVALUACIÓN para estudiante ${reg.student.id}: ${autoEvalData.average} -> ${roundedAutoEvalGrade}`);
+                            autoEvalSheet.getCell(`${this.autoevaluacionColumn}${row}`).value = roundedAutoEvalGrade;
                         }
                     }
 
@@ -810,13 +817,22 @@ export class TasksService {
                         if (studentData.subjects) {
                             Object.entries(studentData.subjects).forEach(([_, subject]: [string, any]) => {
                                 const excelSheetName = this.findMatchingSubject(subject.subjectName);
-                                if (!excelSheetName) return;
+                                if (!excelSheetName) {
+                                    console.log(`No se encontró coincidencia para la materia: ${subject.subjectName}`);
+                                    return;
+                                }
 
                                 const subjectSheet = quarterFile.workbook.getWorksheet(excelSheetName);
-                                if (!subjectSheet) return;
+                                if (!subjectSheet) {
+                                    console.log(`No se encontró la hoja para la materia: ${excelSheetName}`);
+                                    return;
+                                }
 
                                 const columns = this.columnConfig[excelSheetName];
-                                if (!columns) return;
+                                if (!columns) {
+                                    console.log(`No se encontró configuración de columnas para: ${excelSheetName}`);
+                                    return;
+                                }
 
                                 let saberColumnIndex = 0;
                                 let hacerColumnIndex = 0;
@@ -831,18 +847,22 @@ export class TasksService {
                                     return monthOrder[a[0]] - monthOrder[b[0]];
                                 });
 
-                                sortedMonths.forEach(([_, monthData]: [string, any]) => {
+                                sortedMonths.forEach(([month, monthData]: [string, any]) => {
                                     // Pintar promedio SABER
-                                    if (monthData.dimensions[2]?.average !== null && saberColumnIndex < columns.saber.length) {
+                                    if (monthData.dimensions[2]?.average !== null && monthData.dimensions[2]?.average !== undefined && saberColumnIndex < columns.saber.length) {
                                         const saberColumn = columns.saber[saberColumnIndex];
-                                        subjectSheet.getCell(`${saberColumn}${row}`).value = this.roundGrade(monthData.dimensions[2].average);
+                                        const roundedSaberGrade = this.roundGrade(monthData.dimensions[2].average);
+                                        console.log(`Pintando SABER para estudiante ${reg.student.id} en ${subject.subjectName} - ${month}: ${monthData.dimensions[2].average} -> ${roundedSaberGrade}`);
+                                        subjectSheet.getCell(`${saberColumn}${row}`).value = roundedSaberGrade;
                                         saberColumnIndex++;
                                     }
 
                                     // Pintar promedio HACER
-                                    if (monthData.dimensions[3]?.average !== null && hacerColumnIndex < columns.hacer.length) {
+                                    if (monthData.dimensions[3]?.average !== null && monthData.dimensions[3]?.average !== undefined && hacerColumnIndex < columns.hacer.length) {
                                         const hacerColumn = columns.hacer[hacerColumnIndex];
-                                        subjectSheet.getCell(`${hacerColumn}${row}`).value = this.roundGrade(monthData.dimensions[3].average);
+                                        const roundedHacerGrade = this.roundGrade(monthData.dimensions[3].average);
+                                        console.log(`Pintando HACER para estudiante ${reg.student.id} en ${subject.subjectName} - ${month}: ${monthData.dimensions[3].average} -> ${roundedHacerGrade}`);
+                                        subjectSheet.getCell(`${hacerColumn}${row}`).value = roundedHacerGrade;
                                         hacerColumnIndex++;
                                     }
                                 });
