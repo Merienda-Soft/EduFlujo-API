@@ -326,4 +326,5 @@ model Notifications {
   created_date   DateTime @default(now()) @db.Timestamp(6)
   status         Int      @default(0)
   updated_at     DateTime @default(now()) @db.Timestamp(6)
+  @@map("notifications") 
 }

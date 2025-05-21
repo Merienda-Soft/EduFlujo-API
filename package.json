@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
-    "build": "tsc && npx prisma db push && npx prisma generate",
+    "build": "tsc && npx prisma generate",
     "start": "node dist/index.js",
     "render-build": "npm install && npm run build"
   },
