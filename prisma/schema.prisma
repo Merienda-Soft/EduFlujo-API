@@ -318,7 +318,7 @@ model Tutorship {
   @@id([tutor_id, student_id])
 }
 
-model notifications {
+model Notifications {
   id             Int      @id @default(autoincrement()) @map("_id")
   id_person_from Int
   id_person_to   Int
@@ -326,5 +326,4 @@ model notifications {
   created_date   DateTime @default(now()) @db.Timestamp(6)
   status         Int      @default(0)
   updated_at     DateTime @default(now()) @db.Timestamp(6)
-  @@map("Notifications") 
 }
