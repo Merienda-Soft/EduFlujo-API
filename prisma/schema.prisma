@@ -265,6 +265,7 @@ model Task {
   professor         Professor?       @relation(fields: [professor_id], references: [id])
   subject           Subject?         @relation(fields: [subject_id], references: [id])
   assignments       TaskAssignment[]
+  evaluationTools  EvaluationTools[]
 }
 
 model TaskAssignment {
@@ -280,6 +281,7 @@ model TaskAssignment {
   comment        String?
   student        Student   @relation(fields: [student_id], references: [id])
   task           Task      @relation(fields: [task_id], references: [id])
+  evaluation_methodology  Json?
 
   @@id([task_id, student_id])
 }
@@ -326,4 +328,12 @@ model Notifications {
   created_date   DateTime @default(now()) @db.Timestamp(6)
   status         Int      @default(0)
   updated_at     DateTime @default(now()) @db.Timestamp(6)
+}
+
+model EvaluationTools {
+  id             Int      @id @default(autoincrement()) @map("_id")
+  type          Int
+  methodology   Json
+  task_id Int?
+  task    Task? @relation(fields: [task_id], references: [id])
 }
