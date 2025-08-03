@@ -131,6 +131,14 @@ export class TasksService {
                 }
             });
 
+            const evaluation_tool = await tx.evaluationTools.create({
+                data: {
+                    type: data.tool.type,
+                    methodology: data.tool.methodology,
+                    task_id: task.id
+                }
+            })
+
             // Obtener estudiantes del curso
             const students = await tx.student.findMany({
                 where: {
@@ -152,7 +160,8 @@ export class TasksService {
                     data: {
                         task_id: task.id,
                         student_id: student.id,
-                        status: 0
+                        status: 0,
+                        evaluation_methodology: evaluation_tool.methodology //evaluation methodology & tool schema
                     }
                 })
             );
@@ -262,7 +271,8 @@ export class TasksService {
                     data: {
                         qualification: student.qualification,
                         comment: student.comment,
-                        status: 1
+                        status: 1,
+                        evaluation_methodology: student.evaluation_methodology //update after task review
                     }
                 })
             );

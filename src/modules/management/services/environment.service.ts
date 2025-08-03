@@ -54,7 +54,7 @@ export class EnvironmentService {
         { subject: 'CIENCIAS SOCIALES', is_tecnical: 0 },
         { subject: 'CIENCIAS NATURALES', is_tecnical: 0 },
         { subject: 'COMUNICACIÓN Y LENGUAJES', is_tecnical: 0 },
-        { subject: 'VALORES, ESPIRITUALIDADES Y RELIGIONES', is_tecnical: 1 },
+        { subject: 'VALORES ESPIRITUALIDADES Y RELIGIONES', is_tecnical: 1 },
         { subject: 'EDUCACIÓN FÍSICA Y DEPORTES', is_tecnical: 1 },
         { subject: 'EDUCACIÓN MUSICAL', is_tecnical: 1 },
         { subject: 'ARTES PLÁSTICAS Y VISUALES', is_tecnical: 1 },

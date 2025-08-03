@@ -28,12 +28,19 @@ export const taskAssignmentSchema = z.object({
   student_id: z.number().int().positive("El ID del estudiante es requerido"),
   qualification: z.string().max(10).optional(),
   assigned_date: z.coerce.date().optional().default(new Date()),
-  completed_date: z.coerce.date().optional()
+  completed_date: z.coerce.date().optional(),
+  evaluation_methodology: z.any().optional().describe("Metodologia de evaluacion")
+});
+
+export const evaluationMethodologySchema = z.object({
+  type: z.number().int().positive("El tipo tiene un rango entre 1 y 3"),
+  methodology: z.any().optional().describe("Metodologia de evaluacion: Rubrica y Lista de Cotejo")
 });
 
 // Schema combinado para crear tarea y asignarla
 export const createTaskWithAssignmentsSchema = z.object({
   task: createTaskSchema,
+  tool: evaluationMethodologySchema,
   assignments: z.array(taskAssignmentSchema).optional()
 }).refine(data => {
   if (data.task.start_date && data.task.end_date) {
@@ -50,7 +57,8 @@ export const gradeTaskSchema = z.object({
     students: z.array(z.object({
         student_id: z.number().int().positive("El ID del estudiante es requerido"),
         qualification: z.string().max(10, "La calificación no puede exceder 10 caracteres"),
-        comment: z.string().optional()
+        comment: z.string().optional(),
+        evaluation_methodology: z.any().optional().describe("Actualizacion de la tarea segun la herramienta de evaluacion")
     }))
 });
 
@@ -58,6 +66,7 @@ export const gradeTaskSchema = z.object({
 export type CreateTaskDto = z.infer<typeof createTaskSchema>;
 export type TaskAssignmentDto = z.infer<typeof taskAssignmentSchema>;
 export type CreateTaskWithAssignmentsDto = z.infer<typeof createTaskWithAssignmentsSchema>;
+export type EvaluationMethodologySchema = z.infer<typeof evaluationMethodologySchema>;
 export type GradeTaskDto = z.infer<typeof gradeTaskSchema>;
 
 // DTO de respuesta
@@ -116,7 +125,8 @@ export class TaskAssignmentResponseDto {
     public readonly qualification: string,
     public readonly assigned_date: Date,
     public readonly completed_date: Date,
-    public readonly task_id: number
+    public readonly task_id: number,
+    public readonly evaluation_methodology: any
   ) { }
 
   static fromEntity(entity: any): TaskAssignmentResponseDto {
@@ -126,8 +136,22 @@ export class TaskAssignmentResponseDto {
       entity.qualification,
       entity.assigned_date,
       entity.completed_date,
-      entity.task_id
+      entity.task_id,
+      entity.evaluation_methodology
     );
+  }
+}
+
+export class EvaluationMethodologyDTO{
+  constructor(
+    public readonly type: number,
+    public readonly methodology: any,
+  ){}
+  static fromEntity(entity: any): EvaluationMethodologyDTO {
+    return new EvaluationMethodologyDTO(
+      entity.type,
+      entity.methodology
+    )
   }
 }
 
