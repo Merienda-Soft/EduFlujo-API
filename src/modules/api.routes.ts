@@ -9,6 +9,7 @@ import assignmentRouter from './assignment/routes';
 import subjectRouter from './subject/routes';
 import registrationRouter from './registration/routes';
 import notificationRouter from './notifications/routes/notification.routes';
+import { reportsRouter } from './reports/routes/reports.routes';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/subject', subjectRouter);
 router.use('/content', contentRouter);
 router.use('/registration', registrationRouter);
 router.use('/notifications', notificationRouter);
+router.use('/reports', reportsRouter);
 
 export default router;
