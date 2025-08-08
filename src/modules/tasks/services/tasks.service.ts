@@ -161,7 +161,8 @@ export class TasksService {
                         task_id: task.id,
                         student_id: student.id,
                         status: 0,
-                        evaluation_methodology: evaluation_tool.methodology //evaluation methodology & tool schema
+                        evaluation_methodology: structuredClone(evaluation_tool.methodology), //evaluation methodology & tool schema
+                        type: evaluation_tool.type
                     }
                 })
             );
@@ -229,21 +230,62 @@ export class TasksService {
                             }
                         }
                     }
-                },
+                }
             }
         });
     }
 
-    async updateTask(id: number, data: any) {
-        return await this.db.task.update({
-            where: { id },
-            data: {
-                ...data,
-                last_update: new Date()
-            },
-            include: {
-                assignments: true
+    async updateTask(id: number, data: {
+        task: any;
+        tool?: {
+            type: string;
+            methodology: any;
+        };
+        }) {
+        return await this.db.$transaction(async (tx) => {
+            // 1. Actualizar la tarea principal
+            const updatedTask = await tx.task.update({
+                where: { id },
+                data: {
+                    name: data.task.name,
+                    description: data.task.description,
+                    dimension_id: data.task.dimension_id,
+                    management_id: data.task.management_id,
+                    professor_id: data.task.professor_id,
+                    subject_id: data.task.subject_id,
+                    course_id: data.task.course_id,
+                    weight: data.task.weight,
+                    is_autoevaluation: data.task.is_autoevaluation,
+                    quarter: data.task.quarter,
+                    start_date: data.task.start_date,
+                    end_date: data.task.end_date,
+                    last_update: new Date()
+                },
+                include: {
+                    assignments: true
+                }
+            });
+
+            // 2. Actualizar herramienta de evaluación (si existe)
+            if (data.tool) {
+            await tx.evaluationTools.updateMany({
+                where: { task_id: id },
+                data: {
+                type: Number(data.tool.type),
+                methodology: data.tool.methodology
+                }
+            });
+
+            // 3. Actualizar metodología en asignaciones
+            await tx.taskAssignment.updateMany({
+                where: { task_id: id },
+                data: {
+                evaluation_methodology: data.tool.methodology
+                }
+            });
             }
+
+            return updatedTask;
         });
     }
 
@@ -271,7 +313,7 @@ export class TasksService {
                     data: {
                         qualification: student.qualification,
                         comment: student.comment,
-                        status: 1,
+                        status: 2,
                         evaluation_methodology: student.evaluation_methodology //update after task review
                     }
                 })
