@@ -282,6 +282,7 @@ model TaskAssignment {
   student        Student   @relation(fields: [student_id], references: [id])
   task           Task      @relation(fields: [task_id], references: [id])
   evaluation_methodology  Json?
+  type           Int?
 
   @@id([task_id, student_id])
 }
