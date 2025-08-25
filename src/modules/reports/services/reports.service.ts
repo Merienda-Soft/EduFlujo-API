@@ -920,6 +920,519 @@ export class ReportsService {
     return `reporte_asistencia_${courseName}_${subjectName}_${dateStr}.xlsx`;
   }
 
+  async generateCentralizadorAnual(courseId: number, managementId: number) {
+    try {
+      // 1. Obtener información básica
+      const [course, management] = await Promise.all([
+        this.getCourseInfo(courseId),
+        this.getManagementInfo(managementId),
+      ]);
+
+      // 2. Obtener estudiantes del curso
+      const students = await this.getStudentsByCourse(courseId);
+
+      // 3. Obtener todas las materias del curso usando Assignment
+      const assignments = await this.db.assignment.findMany({
+        where: {
+          course_id: courseId,
+          management_id: managementId,
+        },
+        include: {
+          subject: true,
+          professor: {
+            include: {
+              person: true,
+            },
+          },
+        },
+        distinct: ["subject_id"], // Para evitar duplicados por profesor
+      });
+
+      // 4. Obtener todas las dimensiones para calcular los porcentajes
+      const dimensions = await this.db.dimension.findMany();
+
+      // 5. Para cada estudiante y materia, calcular las notas por trimestre
+      const studentGrades = await this.calculateStudentGrades(
+        students,
+        assignments,
+        managementId,
+        dimensions
+      );
+
+      // 6. Generar el archivo Excel
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Centralizador Anual");
+
+      // 7. Configurar el Excel
+      await this.setupCentralizadorExcel(
+        worksheet,
+        students,
+        assignments,
+        studentGrades,
+        course,
+        management
+      );
+
+      // 8. Generar buffer y subir a Firebase
+      const buffer = await workbook.xlsx.writeBuffer();
+      const fileName = this.generateCentralizadorFileName(course, management);
+      const downloadURL = await this.uploadCentralizadorToFirebase(
+        buffer,
+        fileName
+      );
+
+      return {
+        success: true,
+        downloadURL,
+        fileName,
+        message: "Reporte centralizador anual generado exitosamente",
+        data: {
+          course: course,
+          management: management,
+          students: studentGrades, // Incluir los datos detallados en la respuesta
+          subjects: assignments.map((a) => a.subject),
+        },
+      };
+    } catch (error) {
+      console.error("Error generating centralizador anual:", error);
+      throw new Error("Error al generar el reporte centralizador anual");
+    }
+  }
+
+  private async calculateStudentGrades(
+    students: any[],
+    assignments: any[],
+    managementId: number,
+    dimensions: any[]
+  ) {
+    const studentGrades = [];
+
+    for (const registration of students) {
+      const studentData = {
+        student: registration.student, // Extraer el estudiante del registro
+        subjects: [],
+        finalAverage: 0,
+        status: "REPROBADO",
+      };
+
+      for (const assignment of assignments) {
+        const subjectGrades = {
+          subject: assignment.subject,
+          professor: assignment.professor,
+          trimesters: {
+            Q1: {
+              saber: 0,
+              hacer: 0,
+              ser: 0,
+              decidir: 0,
+              autoevaluacion: 0,
+              total: 0,
+            },
+            Q2: {
+              saber: 0,
+              hacer: 0,
+              ser: 0,
+              decidir: 0,
+              autoevaluacion: 0,
+              total: 0,
+            },
+            Q3: {
+              saber: 0,
+              hacer: 0,
+              ser: 0,
+              decidir: 0,
+              autoevaluacion: 0,
+              total: 0,
+            },
+          },
+          finalAverage: 0,
+        };
+
+        // Calcular notas por trimestre
+        for (const trimester of ["Q1", "Q2", "Q3"]) {
+          const trimesterGrades = await this.calculateTrimesterGrades(
+            registration.student.id, // Usar el ID del estudiante del registro
+            assignment.subject_id,
+            managementId,
+            trimester,
+            dimensions
+          );
+          subjectGrades.trimesters[trimester] = trimesterGrades;
+        }
+
+        // Calcular promedio final de la materia
+        const totalTrimesters = Object.values(subjectGrades.trimesters);
+        subjectGrades.finalAverage =
+          totalTrimesters.reduce((sum, t: any) => sum + t.total, 0) /
+          totalTrimesters.length;
+
+        studentData.subjects.push(subjectGrades);
+      }
+
+      // Calcular promedio final del estudiante
+      if (studentData.subjects.length > 0) {
+        studentData.finalAverage =
+          studentData.subjects.reduce(
+            (sum, subject: any) => sum + subject.finalAverage,
+            0
+          ) / studentData.subjects.length;
+        studentData.status =
+          studentData.finalAverage >= 51 ? "APROBADO" : "REPROBADO";
+      }
+
+      studentGrades.push(studentData);
+    }
+
+    return studentGrades;
+  }
+
+  private async calculateTrimesterGrades(
+    studentId: number,
+    subjectId: number,
+    managementId: number,
+    quarter: string,
+    dimensions: any[]
+  ) {
+    console.log(
+      `Calculando trimestre ${quarter} para estudiante ${studentId}, materia ${subjectId}`
+    );
+
+    const grades = {
+      saber: 0,
+      hacer: 0,
+      ser: 0,
+      decidir: 0,
+      autoevaluacion: 0,
+      total: 0,
+      details: {
+        saber: { tasks: [], average: 0, count: 0 },
+        hacer: { tasks: [], average: 0, count: 0 },
+        ser: { tasks: [], average: 0, count: 0 },
+        decidir: { tasks: [], average: 0, count: 0 },
+        autoevaluacion: { tasks: [], average: 0, count: 0 },
+      },
+    };
+
+    // Obtener todas las tareas del trimestre
+    const tasks = await this.db.task.findMany({
+      where: {
+        subject_id: subjectId,
+        management_id: managementId,
+        quarter: quarter,
+        status: 1, // Tareas activas
+      },
+      include: {
+        assignments: {
+          where: {
+            student_id: studentId,
+          },
+        },
+        dimension: true,
+      },
+    });
+
+    console.log(
+      `Encontradas ${tasks.length} tareas para el trimestre ${quarter}`
+    );
+
+    // Agrupar tareas por dimensión
+    const tasksByDimension = {
+      saber: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("saber")
+      ),
+      hacer: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("hacer")
+      ),
+      ser: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("ser")
+      ),
+      decidir: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("decidir")
+      ),
+    };
+
+    // Separar autoevaluaciones
+    const autoevaluaciones = tasks.filter((t) => t.is_autoevaluation === 1);
+
+    // Calcular promedio por dimensión
+    for (const [dimensionName, dimensionTasks] of Object.entries(
+      tasksByDimension
+    )) {
+      if (dimensionTasks.length > 0) {
+        const taskGrades = [];
+        const totalScore = dimensionTasks.reduce((sum, task) => {
+          const assignment = task.assignments[0];
+          if (assignment && assignment.qualification) {
+            const score = parseFloat(assignment.qualification);
+            taskGrades.push({
+              taskName: task.name,
+              score: score,
+            });
+            return sum + score;
+          }
+          return sum;
+        }, 0);
+
+        const averageScore = totalScore / dimensionTasks.length;
+        grades.details[dimensionName].tasks = taskGrades;
+        grades.details[dimensionName].average = averageScore;
+        grades.details[dimensionName].count = dimensionTasks.length;
+
+        // Aplicar porcentajes según la distribución
+        switch (dimensionName) {
+          case "saber":
+            grades.saber = (averageScore * 45) / 100;
+            break;
+          case "hacer":
+            grades.hacer = (averageScore * 40) / 100;
+            break;
+          case "ser":
+            grades.ser = (averageScore * 5) / 100;
+            break;
+          case "decidir":
+            grades.decidir = (averageScore * 5) / 100;
+            break;
+        }
+      }
+    }
+
+    // Calcular autoevaluación
+    if (autoevaluaciones.length > 0) {
+      const taskGrades = [];
+      const totalAutoeval = autoevaluaciones.reduce((sum, task) => {
+        const assignment = task.assignments[0];
+        if (assignment && assignment.qualification) {
+          const score = parseFloat(assignment.qualification);
+          taskGrades.push({
+            taskName: task.name,
+            score: score,
+          });
+          return sum + score;
+        }
+        return sum;
+      }, 0);
+
+      const averageAutoeval = totalAutoeval / autoevaluaciones.length;
+      grades.details.autoevaluacion.tasks = taskGrades;
+      grades.details.autoevaluacion.average = averageAutoeval;
+      grades.details.autoevaluacion.count = autoevaluaciones.length;
+      grades.autoevaluacion = (averageAutoeval * 5) / 100;
+    }
+
+    // Calcular total
+    grades.total =
+      grades.saber +
+      grades.hacer +
+      grades.ser +
+      grades.decidir +
+      grades.autoevaluacion;
+
+    console.log(`Trimestre ${quarter} calculado:`, grades);
+    return grades;
+  }
+
+  private async setupCentralizadorExcel(
+    worksheet: ExcelJS.Worksheet,
+    students: any[],
+    assignments: any[],
+    studentGrades: any[],
+    course: any,
+    management: any
+  ) {
+    // Calcular número total de columnas
+    const totalColumns = 2 + assignments.length * 4 + 2; // N°, NOMBRE, (4 cols x materia), PROMEDIO, SITUACION
+
+    // Configurar título
+    worksheet.mergeCells(`A1:${String.fromCharCode(64 + totalColumns)}1`);
+    const titleCell = worksheet.getCell("A1");
+    titleCell.value = `CENTRALIZADOR ANUAL - ${course.course} - GESTIÓN ${management.management}`;
+    titleCell.font = { bold: true, size: 16 };
+    titleCell.alignment = { horizontal: "center" };
+
+    // Fila 2: N° y APELLIDOS Y NOMBRES (que abarcan 2 filas)
+    worksheet.mergeCells("A2:A3");
+    const numCell = worksheet.getCell("A2");
+    numCell.value = "N°";
+    numCell.font = { bold: true };
+    numCell.alignment = { horizontal: "center", vertical: "middle" };
+    numCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    worksheet.mergeCells("B2:B3");
+    const nameCell = worksheet.getCell("B2");
+    nameCell.value = "APELLIDOS Y NOMBRES";
+    nameCell.font = { bold: true };
+    nameCell.alignment = { horizontal: "center", vertical: "middle" };
+    nameCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    // Configurar encabezados de materias
+    let currentCol = 3;
+    assignments.forEach((assignment) => {
+      // Fila 2: Nombre de la materia (abarca 4 columnas)
+      const startCol = String.fromCharCode(64 + currentCol);
+      const endCol = String.fromCharCode(64 + currentCol + 3);
+      worksheet.mergeCells(`${startCol}2:${endCol}2`);
+
+      const subjectCell = worksheet.getCell(`${startCol}2`);
+      subjectCell.value = assignment.subject.subject;
+      subjectCell.font = { bold: true };
+      subjectCell.alignment = { horizontal: "center" };
+      subjectCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE0E0E0" },
+      };
+
+      // Fila 3: Subencabezados (1T, 2T, 3T, PR)
+      const subHeaders = ["1T", "2T", "3T", "PR"];
+      subHeaders.forEach((header, subIndex) => {
+        const col = String.fromCharCode(64 + currentCol + subIndex);
+        const cell = worksheet.getCell(`${col}3`);
+        cell.value = header;
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: "center" };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE0E0E0" },
+        };
+      });
+
+      currentCol += 4;
+    });
+
+    // PROMEDIO FINAL y SITUACIÓN (abarcan 2 filas)
+    const promedioCol = String.fromCharCode(64 + currentCol);
+    const situacionCol = String.fromCharCode(64 + currentCol + 1);
+
+    worksheet.mergeCells(`${promedioCol}2:${promedioCol}3`);
+    const promedioCell = worksheet.getCell(`${promedioCol}2`);
+    promedioCell.value = "PROMEDIO FINAL";
+    promedioCell.font = { bold: true };
+    promedioCell.alignment = { horizontal: "center", vertical: "middle" };
+    promedioCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    worksheet.mergeCells(`${situacionCol}2:${situacionCol}3`);
+    const situacionCell = worksheet.getCell(`${situacionCol}2`);
+    situacionCell.value = "SITUACIÓN";
+    situacionCell.font = { bold: true };
+    situacionCell.alignment = { horizontal: "center", vertical: "middle" };
+    situacionCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    // Aplicar bordes a los encabezados
+    for (let row = 2; row <= 3; row++) {
+      for (let col = 1; col <= totalColumns; col++) {
+        const cell = worksheet.getCell(row, col);
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      }
+    }
+
+    // Llenar datos de estudiantes (empezando desde la fila 4)
+    studentGrades.forEach((studentData, index) => {
+      const row = worksheet.getRow(index + 4);
+      let colIndex = 1;
+
+      // Número y nombre
+      row.getCell(colIndex++).value = index + 1;
+      row.getCell(
+        colIndex++
+      ).value = `${studentData.student.person.lastname} ${studentData.student.person.name}`;
+
+      // Notas por materia
+      studentData.subjects.forEach((subjectGrade: any) => {
+        row.getCell(colIndex++).value = Math.round(
+          subjectGrade.trimesters.Q1.total
+        );
+        row.getCell(colIndex++).value = Math.round(
+          subjectGrade.trimesters.Q2.total
+        );
+        row.getCell(colIndex++).value = Math.round(
+          subjectGrade.trimesters.Q3.total
+        );
+        row.getCell(colIndex++).value = Math.round(subjectGrade.finalAverage);
+      });
+
+      // Promedio final y situación
+      row.getCell(colIndex++).value = Math.round(studentData.finalAverage);
+      const statusCell = row.getCell(colIndex++);
+      statusCell.value = studentData.status;
+      statusCell.font = {
+        bold: true,
+        color: {
+          argb: studentData.status === "APROBADO" ? "FF008000" : "FFFF0000",
+        },
+      };
+
+      // Aplicar bordes a toda la fila
+      for (let i = 1; i <= totalColumns; i++) {
+        const cell = row.getCell(i);
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+        cell.alignment = { horizontal: "center" };
+      }
+    });
+
+    // Ajustar ancho de columnas
+    worksheet.getColumn(1).width = 5; // N°
+    worksheet.getColumn(2).width = 25; // APELLIDOS Y NOMBRES
+
+    // Columnas de materias
+    for (let i = 3; i <= 2 + assignments.length * 4; i++) {
+      worksheet.getColumn(i).width = 8;
+    }
+
+    // Columnas finales
+    worksheet.getColumn(totalColumns - 1).width = 15; // PROMEDIO FINAL
+    worksheet.getColumn(totalColumns).width = 12; // SITUACIÓN
+  }
+
+  private generateCentralizadorFileName(course: any, management: any): string {
+    const courseName = course?.course?.replace(/\s+/g, "_") || "curso";
+    const managementYear = management?.management || "gestion";
+    const dateStr = new Date().toISOString().split("T")[0];
+
+    return `centralizador_anual_${courseName}_${managementYear}_${dateStr}.xlsx`;
+  }
+
+  private async uploadCentralizadorToFirebase(
+    buffer: ArrayBuffer,
+    fileName: string
+  ): Promise<string> {
+    try {
+      const storageRef = ref(this.storage, `reports/centralizador/${fileName}`);
+      const snapshot = await uploadBytes(storageRef, new Uint8Array(buffer));
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("Error uploading centralizador to Firebase:", error);
+      throw new Error("Error al subir el reporte centralizador a Firebase");
+    }
+  }
+
   private async uploadToFirebase(
     buffer: Uint8Array,
     fileName: string

@@ -29,5 +29,11 @@ export const reportsRouter = (() => {
     reportsController.generateManagementReport.bind(reportsController)
   );
 
+  // Reporte centralizador anual de notas (todas las materias del curso)
+  router.get(
+    "/centralizador/course/:courseId/management/:managementId",
+    reportsController.generateCentralizadorAnual.bind(reportsController)
+  );
+
   return router;
 })();

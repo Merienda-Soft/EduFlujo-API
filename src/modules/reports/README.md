@@ -1,6 +1,65 @@
-# 📊 API Endpoints - Reportes de Asistencia
+# 📊 API Endpoints - Reportes Académicos
 
 ## 🔗 **Endpoints Disponibles**
+
+---
+
+## 📚 **REPORTES DE CENTRALIZADOR**
+
+### 1. **Centralizador Anual**
+
+```
+GET /reports/centralizador/course/{courseId}/management/{managementId}
+```
+
+**Descripción:** Genera un reporte completo con las calificaciones de todos los estudiantes de un curso, mostrando las notas por trimestre, promedio final y situación académica (APROBADO/REPROBADO).
+
+**Parámetros:**
+
+- `courseId`: ID del curso (número)
+- `managementId`: ID de la gestión académica (número)
+
+**Ejemplo:**
+
+```
+GET /reports/centralizador/course/1/management/1
+```
+
+**Formato de Respuesta:**
+
+```json
+{
+  "ok": true,
+  "downloadUrl": "https://firebase.storage.url/centralizador.xlsx",
+  "fileName": "centralizador_Primero_2025.xlsx",
+  "totalStudents": 25,
+  "totalSubjects": 8,
+  "reportInfo": {
+    "course": "Primero",
+    "management": "2025",
+    "generatedAt": "2025-08-25T10:30:00Z"
+  }
+}
+```
+
+**Características del Excel:**
+
+- � **Encabezado de 2 filas:** Materias en fila superior, trimestres (1T, 2T, 3T, PR) en fila inferior
+- 📊 **Cálculo automático:** Promedio por materia y promedio final
+- 🎯 **Situación académica:** APROBADO (≥51 puntos) / REPROBADO (<51 puntos)
+- 🎨 **Formato visual:** Celdas combinadas, colores y bordes profesionales
+- 📈 **Desglose por trimestre:** Notas completas con cálculo de:
+  - Saber: 45% (45 puntos)
+  - Hacer: 40% (40 puntos)
+  - Ser: 5% (5 puntos)
+  - Decidir: 5% (5 puntos)
+  - Autoevaluación: 5% (5 puntos)
+
+---
+
+## 📋 **REPORTES DE ASISTENCIA**
+
+## 📋 **REPORTES DE ASISTENCIA**
 
 ### 1. **Reporte por Rango de Fechas Personalizado**
 
@@ -25,7 +84,7 @@ GET /reports/attendance/custom/course/1/subject/1/professor/1/management/1?start
 
 ---
 
-### 2. **Reporte Mensual**
+### 2. **Reporte Mensual de Asistencia**
 
 ```
 GET /reports/attendance/monthly/{year}/{month}/course/{courseId}/subject/{subjectId}/professor/{professorId}/management/{managementId}
@@ -45,7 +104,7 @@ GET /reports/attendance/monthly/2025/8/course/1/subject/1/professor/1/management
 
 ---
 
-### 3. **Reporte Anual**
+### 3. **Reporte Anual de Asistencia**
 
 ```
 GET /reports/attendance/yearly/{year}/course/{courseId}/subject/{subjectId}/professor/{professorId}/management/{managementId}
@@ -64,7 +123,7 @@ GET /reports/attendance/yearly/2025/course/1/subject/1/professor/1/management/1
 
 ---
 
-### 4. **Reporte por Gestión Académica**
+### 4. **Reporte por Gestión Académica de Asistencia**
 
 ```
 GET /reports/attendance/management/course/{courseId}/subject/{subjectId}/professor/{professorId}/management/{managementId}
@@ -82,7 +141,7 @@ GET /reports/attendance/management/course/1/subject/1/professor/1/management/1
 
 ---
 
-## 📋 **Formato de Respuesta**
+## 📋 **Formato de Respuesta para Reportes de Asistencia**
 
 ### **Respuesta Exitosa:**
 
@@ -123,7 +182,7 @@ GET /reports/attendance/management/course/1/subject/1/professor/1/management/1
 
 ---
 
-## 🎨 **Características del Excel Generado**
+## 🎨 **Características del Excel de Asistencia**
 
 ### **Diseño Visual:**
 
@@ -151,7 +210,7 @@ GET /reports/attendance/management/course/1/subject/1/professor/1/management/1
 
 ---
 
-## 🔍 **Validaciones**
+## 🔍 **Validaciones para Reportes de Asistencia**
 
 ### **Parámetros Comunes:**
 
@@ -165,17 +224,29 @@ GET /reports/attendance/management/course/1/subject/1/professor/1/management/1
 - startDate debe ser anterior a endDate
 - Fechas deben ser válidas
 
-### **Gestión:**
+### **Validaciones para Centralizador:**
 
-- La gestión debe existir en la base de datos
-- Si no tiene fechas específicas, usa febrero-diciembre del año de gestión
+- `courseId` debe ser un número entero positivo válido
+- `managementId` debe ser un número entero positivo válido
+- El curso debe existir en la base de datos
+- La gestión debe existir y tener estudiantes matriculados
+- Debe haber al menos una materia asignada al curso
 
 ---
 
-## 📝 **Notas Técnicas**
+## 📝 **Notas Técnicas Generales**
+
+### **Para todos los reportes:**
 
 1. **Subida a Firebase**: Los archivos se suben automáticamente a Firebase Storage
 2. **Nombres de Archivo**: Formato automático con fecha y hora de generación
 3. **Caché**: Los reportes no se cachean, siempre se generan datos frescos
 4. **Formato Excel**: Compatible con Microsoft Excel y LibreOffice Calc
 5. **Rendimiento**: Optimizado para cursos con hasta 50 estudiantes
+
+### **Específico para Centralizador:**
+
+- **Cálculo automático**: Las notas se calculan automáticamente según los porcentajes del sistema boliviano
+- **Situación académica**: Se determina automáticamente según el promedio final (≥51 = APROBADO)
+- **Trimestres**: Se consideran Q1, Q2, Q3 como los tres trimestres académicos
+- **Formato visual**: Excel con celdas combinadas y formato profesional de 2 filas de encabezados

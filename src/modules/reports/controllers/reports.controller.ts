@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { ZodError } from "zod";
 import {
   attendanceReportSchema,
+  centralizadorAnualSchema,
   customDateReportSchema,
   managementReportSchema,
   monthlyReportSchema,
@@ -267,6 +268,39 @@ export class ReportsController {
           endDate,
           academicPeriod: `Gestión ${management.management}`,
         },
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          ok: false,
+          error: "Datos de entrada inválidos",
+          details: error.errors,
+        });
+      }
+      this.handleError(res, error);
+    }
+  }
+
+  // Reporte centralizador anual de notas
+  // Params: /centralizador/course/1/management/1
+  async generateCentralizadorAnual(req: Request, res: Response) {
+    try {
+      const { courseId, managementId } = req.params;
+
+      // Validar parámetros
+      const validatedData = centralizadorAnualSchema.parse({
+        courseId: Number(courseId),
+        managementId: Number(managementId),
+      });
+
+      const result = await this.service.generateCentralizadorAnual(
+        validatedData.courseId,
+        validatedData.managementId
+      );
+
+      res.status(200).json({
+        ...result,
+        reportType: "centralizador_anual",
       });
     } catch (error) {
       if (error instanceof ZodError) {
