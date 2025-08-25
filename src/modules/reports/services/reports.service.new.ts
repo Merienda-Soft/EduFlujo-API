@@ -140,7 +140,7 @@ export class ReportsService {
     });
   }
 
-  public async getManagementInfo(managementId: number) {
+  private async getManagementInfo(managementId: number) {
     return await this.db.management.findUnique({
       where: { id: managementId },
     });
@@ -502,20 +502,7 @@ export class ReportsService {
 
       const workingDays = [];
 
-      // Determinar el rango real de días para este mes
-      const actualStartDay =
-        currentYear === startDate.getFullYear() &&
-        currentMonth === startDate.getMonth()
-          ? startDate.getDate()
-          : 1;
-
-      const actualEndDay =
-        currentYear === endDate.getFullYear() &&
-        currentMonth === endDate.getMonth()
-          ? endDate.getDate()
-          : monthEnd.getDate();
-
-      for (let day = actualStartDay; day <= actualEndDay; day++) {
+      for (let day = 1; day <= monthEnd.getDate(); day++) {
         const currentDate = new Date(currentYear, currentMonth, day);
         const dayOfWeek = currentDate.getDay();
 
@@ -530,14 +517,11 @@ export class ReportsService {
         }
       }
 
-      // Solo agregar el mes si tiene días laborables en el rango
-      if (workingDays.length > 0) {
-        months.push({
-          month: monthNames[currentMonth],
-          year: currentYear,
-          workingDays: workingDays,
-        });
-      }
+      months.push({
+        month: monthNames[currentMonth],
+        year: currentYear,
+        workingDays: workingDays,
+      });
 
       currentMonth++;
       if (currentMonth > 11) {
@@ -932,6 +916,45 @@ export class ReportsService {
     } catch (error) {
       console.error("Error uploading to Firebase:", error);
       throw new Error("Error al subir el archivo a Firebase");
+    }
+  }
+
+  // Método de test para debug
+  async testAttendanceData(
+    courseId: number,
+    subjectId: number,
+    professorId: number,
+    managementId: number
+  ) {
+    try {
+      console.log("=== TESTING ATTENDANCE DATA ===");
+
+      const attendanceData = await this.getAttendanceData(
+        courseId,
+        subjectId,
+        professorId,
+        managementId
+      );
+
+      console.log("Total attendance records:", attendanceData.length);
+
+      attendanceData.forEach((attendance) => {
+        console.log(`\nAttendance ID: ${attendance.id}`);
+        console.log(`Date: ${attendance.attendance_date}`);
+        console.log(`Records:`, attendance.attendances);
+      });
+
+      return {
+        ok: true,
+        data: attendanceData,
+        message: "Test completed successfully",
+      };
+    } catch (error) {
+      console.error("Error in test:", error);
+      return {
+        ok: false,
+        error: error.message,
+      };
     }
   }
 }
