@@ -314,6 +314,64 @@ export class ReportsController {
     }
   }
 
+  async generateBoletin(req: Request, res: Response) {
+    try {
+      const { courseId, managementId, studentId } = req.params;
+      const { trimester } = req.query;
+
+      // Validar parámetros básicos
+      const courseIdNum = Number(courseId);
+      const managementIdNum = Number(managementId);
+      const studentIdNum = studentId ? Number(studentId) : undefined;
+
+      if (isNaN(courseIdNum) || isNaN(managementIdNum)) {
+        return res.status(400).json({
+          ok: false,
+          error: "courseId y managementId deben ser números válidos",
+        });
+      }
+
+      if (studentId && isNaN(studentIdNum!)) {
+        return res.status(400).json({
+          ok: false,
+          error: "studentId debe ser un número válido",
+        });
+      }
+
+      // Validar trimestre si se proporciona
+      const validTrimesters = ["Q1", "Q2", "Q3", "ANUAL"];
+      const trimesterValue = trimester as string;
+
+      if (trimester && !validTrimesters.includes(trimesterValue)) {
+        return res.status(400).json({
+          ok: false,
+          error: "trimester debe ser Q1, Q2, Q3 o ANUAL",
+        });
+      }
+
+      const result = await this.service.generateBoletin(
+        courseIdNum,
+        managementIdNum,
+        studentIdNum,
+        trimesterValue as "Q1" | "Q2" | "Q3" | "ANUAL" | undefined
+      );
+
+      res.status(200).json({
+        ...result,
+        reportType: studentId ? "boletin_individual" : "boletines_curso",
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          ok: false,
+          error: "Datos de entrada inválidos",
+          details: error.errors,
+        });
+      }
+      this.handleError(res, error);
+    }
+  }
+
   private handleError(res: Response, error: any) {
     console.error(error);
     res.status(500).json({

@@ -1,15 +1,17 @@
 {
-    "compilerOptions": {
-        "outDir": "./dist",
-        "rootDir": "./src",
-        "lib": ["ESNext"],
-        "target": "ESNext",
-        "moduleResolution": "nodeNext",
-        "module": "NodeNext",
-        "strict": false,
-        "sourceMap": true,
-        "esModuleInterop": true,
-        "declaration": true,
-    },
-    "include": ["src/**/*.ts"],
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "moduleResolution": "nodeNext",
+    "module": "NodeNext",
+    "strict": false,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
 }

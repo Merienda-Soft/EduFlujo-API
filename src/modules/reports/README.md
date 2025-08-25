@@ -4,7 +4,171 @@
 
 ---
 
-## 📚 **REPORTES DE CENTRALIZADOR**
+## � **REPORTES DE BOLETINES**---
+
+## 🛠️ **IMPLEMENTACIONES TÉCNICAS AVANZADAS**
+
+### **Sistema de Boletines Optimizado**
+
+#### **📊 Cálculo de Áreas Reprobadas por Trimestre**
+
+```typescript
+// Implementación de cálculo separado por trimestre
+const areasReprobadasQ1 = studentGrades.filter(
+  (sg) => sg.trimesters.Q1.total < 51
+).length;
+const areasReprobadasQ2 = studentGrades.filter(
+  (sg) => sg.trimesters.Q2.total < 51
+).length;
+const areasReprobadasQ3 = studentGrades.filter(
+  (sg) => sg.trimesters.Q3.total < 51
+).length;
+```
+
+#### **📑 Sistema de Múltiples Boletines por Página**
+
+- **Algoritmo de posicionamiento**: Control automático para colocar 2 boletines por página A4
+- **Prevención de superposición**: Cálculo de posición Y basado en número de materias
+- **Gestión de páginas**: Sistema inteligente que agrega nueva página cada 2 boletines
+
+```typescript
+const startY = positionInPage === 0 ? 25 : 150; // Primera posición: 25mm, segunda: 150mm
+```
+
+#### **🎨 Formato de Tabla Oficial Replicado**
+
+- **Estructura completa en tabla**: Todo el contenido del boletín dentro de una sola tabla unificada
+- **Encabezados jerárquicos**: Título, información del estudiante, headers de columnas en estructura tabular
+- **Colores oficiales**: Replicación exacta del formato boliviano con códigos de color específicos
+
+#### **🔴 Indicadores Visuales Avanzados**
+
+```typescript
+// Implementación de color condicional para notas reprobadas
+textColor: finalGrade < 51 ? [255, 0, 0] : [0, 0, 0]; // Rojo para reprobados
+```
+
+#### **📐 Optimización de Dimensiones**
+
+- **Fuentes adaptables**: fontSize reducido a 7px para máxima compacidad
+- **Columnas optimizadas**: Anchos específicos para cada tipo de contenido
+- **Márgenes calculados**: 15mm para prevenir desbordamiento en impresión
+
+---
+
+## 📋 **REPORTES DE CENTRALIZADOR**### 1. **Boletines de Curso Completo**
+
+```
+GET /reports/boletines/course/{courseId}/management/{managementId}?trimester=Q1|Q2|Q3|ANUAL
+```
+
+**Descripción:** Genera boletines individuales en PDF para todos los estudiantes de un curso. Cada estudiante obtiene su propio boletín con sus calificaciones por materia.
+
+**Parámetros:**
+
+- `courseId`: ID del curso (número)
+- `managementId`: ID de la gestión académica (número)
+- `trimester`: (Opcional) Trimestre específico (Q1, Q2, Q3) o ANUAL para todas las notas
+
+**Ejemplo:**
+
+```
+GET /reports/boletines/course/1/management/1?trimester=Q1
+```
+
+---
+
+### 2. **Boletín Individual de Estudiante**
+
+```
+GET /reports/boletin/course/{courseId}/management/{managementId}/student/{studentId}?trimester=Q1|Q2|Q3|ANUAL
+```
+
+**Descripción:** Genera un boletín individual en PDF para un estudiante específico.
+
+**Parámetros:**
+
+- `courseId`: ID del curso (número)
+- `managementId`: ID de la gestión académica (número)
+- `studentId`: ID del estudiante (número)
+- `trimester`: (Opcional) Trimestre específico (Q1, Q2, Q3) o ANUAL para todas las notas
+
+**Ejemplo:**
+
+```
+GET /reports/boletin/course/1/management/1/student/5?trimester=ANUAL
+```
+
+**Formato de Respuesta:**
+
+```json
+{
+  "ok": true,
+  "boletines": [
+    {
+      "studentId": 5,
+      "studentName": "TORREZ CAMILA VICTORIA",
+      "downloadUrl": "https://firebase.storage.url/boletin.pdf",
+      "fileName": "boletin_Primero_TORREZ_CAMILA_Q1_2025.pdf"
+    }
+  ],
+  "totalStudents": 1,
+  "reportInfo": {
+    "course": "Primero",
+    "management": "2025",
+    "trimester": "Q1",
+    "generatedAt": "2025-08-25T10:30:00Z"
+  },
+  "reportType": "boletin_individual"
+}
+```
+
+**Características del PDF del Boletín:**
+
+- 📋 **Formato oficial:** Encabezado con datos del estudiante, curso y período
+- 📊 **Tabla de materias:** Lista de todas las áreas curriculares del curso en formato de tabla profesional
+- 🎯 **Calificaciones por trimestre:**
+  - **Trimestral:** Solo muestra la nota del trimestre seleccionado
+  - **Anual:** Muestra 1T, 2T, 3T y PROMEDIO ANUAL para cada materia
+- 📈 **Cálculo automático:**
+  - Promedio trimestral por cada período académico
+  - Total de áreas reprobadas por trimestre (3 columnas alineadas)
+  - Situación académica automática
+- 🎨 **Diseño profesional:**
+  - Formato de tabla oficial replicando el estándar boliviano
+  - Estructura completa dentro de una tabla unificada
+  - Colores y bordes profesionales con grid completo
+- 🔴 **Indicadores visuales:**
+  - Notas reprobadas (< 51 puntos) marcadas en color rojo
+  - Encabezados con fondos de color para mejor organización
+- 📄 **Información adicional:**
+  - Total de áreas reprobadas por trimestre (separado por columnas)
+  - Situación final (APROBADO/REPROBADO)
+  - Fecha de generación
+- 📑 **Optimización de espacio:**
+  - Diseño compacto que permite 2 boletines por página A4
+  - Fuentes y espaciado optimizados para máximo aprovechamiento
+  - Posicionamiento automático sin superposición
+
+**Tipos de Boletín:**
+
+1. **Trimestral (Q1, Q2, Q3):**
+
+   - Muestra solo las notas del trimestre seleccionado
+   - Los otros trimestres aparecen en blanco para completar posteriormente
+   - Total de áreas reprobadas solo para el trimestre correspondiente
+   - Ideal para entregas trimestrales y evaluaciones parciales
+
+2. **Anual (ANUAL):**
+   - Muestra todas las notas de los 3 trimestres completos
+   - Incluye promedio anual calculado automáticamente por materia
+   - Total de áreas reprobadas desglosado por cada trimestre (3 columnas)
+   - Situación académica final con indicadores visuales (rojo para reprobados)
+   - Documento oficial completo para archivo y certificación
+
+---
+
+## �📚 **REPORTES DE CENTRALIZADOR**
 
 ### 1. **Centralizador Anual**
 
@@ -224,6 +388,17 @@ GET /reports/attendance/management/course/1/subject/1/professor/1/management/1
 - startDate debe ser anterior a endDate
 - Fechas deben ser válidas
 
+### **Validaciones para Boletines:**
+
+- `courseId` debe ser un número entero positivo válido
+- `managementId` debe ser un número entero positivo válido
+- `studentId` (si se proporciona) debe ser un número entero positivo válido
+- `trimester` (opcional) debe ser uno de: Q1, Q2, Q3, ANUAL
+- El curso debe existir en la base de datos
+- La gestión debe existir y tener estudiantes matriculados
+- El estudiante (si se especifica) debe estar matriculado en el curso
+- Debe haber al menos una materia asignada al curso
+
 ### **Validaciones para Centralizador:**
 
 - `courseId` debe ser un número entero positivo válido
@@ -243,6 +418,27 @@ GET /reports/attendance/management/course/1/subject/1/professor/1/management/1
 3. **Caché**: Los reportes no se cachean, siempre se generan datos frescos
 4. **Formato Excel**: Compatible con Microsoft Excel y LibreOffice Calc
 5. **Rendimiento**: Optimizado para cursos con hasta 50 estudiantes
+
+### **Específico para Boletines:**
+
+- **Formato PDF**: Generados con jsPDF y autoTable para máxima compatibilidad y diseño profesional
+- **Almacenamiento**: Organizados por carpetas en Firebase Storage (`reports/boletines/`)
+- **Nomenclatura**: `boletin_{curso}_{apellido}_{nombre}_{trimestre}_{gestion}_{timestamp}.pdf`
+- **Diseño**:
+  - Replica exactamente el formato oficial boliviano mostrado en la imagen de referencia
+  - Tabla completa unificada con todos los elementos (título, datos, notas) dentro de la estructura
+  - Grid profesional con bordes y colores oficiales
+- **Flexibilidad**: Permite generar boletines trimestrales (con trimestres en blanco) o anuales (completos)
+- **Escalabilidad**:
+  - Optimizado para procesar curso completo o estudiante individual
+  - Sistema de 2 boletines por página A4 para aprovechar el espacio
+  - Prevención automática de superposición entre boletines
+- **Características técnicas avanzadas:**
+  - Cálculo de áreas reprobadas por trimestre individual (3 columnas separadas)
+  - Indicadores visuales con color rojo para notas reprobadas (< 51 puntos)
+  - Fuentes y espaciado optimizados para máxima legibilidad en formato compacto
+  - Posicionamiento automático: primer boletín en posición Y=25mm, segundo en Y=150mm
+  - Dimensiones optimizadas para evitar desbordamiento de márgenes
 
 ### **Específico para Centralizador:**
 

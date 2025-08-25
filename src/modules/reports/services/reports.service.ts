@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import * as ExcelJS from "exceljs";
 import { initializeApp } from "firebase/app";
 import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export class ReportsService {
   private db: PrismaClient;
@@ -1445,6 +1447,982 @@ export class ReportsService {
     } catch (error) {
       console.error("Error uploading to Firebase:", error);
       throw new Error("Error al subir el archivo a Firebase");
+    }
+  }
+
+  // ================= BOLETINES =================
+
+  async generateBoletin(
+    courseId: number,
+    managementId: number,
+    studentId?: number,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    try {
+      console.log("🎯 Generando boletín:", {
+        courseId,
+        managementId,
+        studentId,
+        trimester,
+      });
+
+      // Obtener información del curso y gestión
+      const course = await this.db.course.findUnique({
+        where: { id: courseId },
+      });
+
+      const management = await this.db.management.findUnique({
+        where: { id: managementId },
+      });
+
+      if (!course || !management) {
+        throw new Error("Curso o gestión no encontrados");
+      }
+
+      // Obtener estudiantes (uno específico o todos) a través de Registration
+      const whereClause: any = {
+        registrations: {
+          some: {
+            course_id: courseId,
+            management_id: managementId,
+          },
+        },
+      };
+
+      if (studentId) {
+        whereClause.id = studentId;
+      }
+
+      const students = await this.db.student.findMany({
+        where: whereClause,
+        include: {
+          person: true,
+        },
+        orderBy: {
+          person: {
+            lastname: "asc",
+          },
+        },
+      });
+
+      if (students.length === 0) {
+        throw new Error("No se encontraron estudiantes");
+      }
+
+      // Obtener materias del curso a través de Assignment
+      const assignments = await this.db.assignment.findMany({
+        where: {
+          course_id: courseId,
+          management_id: managementId,
+        },
+        include: {
+          subject: true,
+          professor: {
+            include: {
+              person: true,
+            },
+          },
+        },
+        orderBy: {
+          subject: {
+            subject: "asc",
+          },
+        },
+      });
+
+      if (assignments.length === 0) {
+        throw new Error("No se encontraron materias asignadas al curso");
+      }
+
+      // Generar PDF único con todos los boletines
+      console.log(`📝 Generando boletines para ${students.length} estudiantes`);
+
+      // Calcular notas para todos los estudiantes
+      const allStudentGrades = [];
+      for (const student of students) {
+        const studentGrades = await this.calculateStudentGradesForBoletin(
+          student.id,
+          assignments,
+          trimester
+        );
+        allStudentGrades.push({
+          student,
+          grades: studentGrades,
+        });
+      }
+
+      // Generar PDF único con todos los boletines
+      const pdfBuffer = await this.generateAllBoletinesPDF(
+        allStudentGrades,
+        assignments,
+        course,
+        management,
+        trimester
+      );
+
+      // Subir a Firebase
+      const fileName = `boletines_curso_${course.course}_${
+        trimester || "ANUAL"
+      }_${management.management}_${Date.now()}.pdf`;
+      const downloadUrl = await this.uploadBoletinToFirebase(
+        pdfBuffer,
+        fileName
+      );
+
+      return {
+        ok: true,
+        boletines: [
+          {
+            courseId: course.id,
+            courseName: course.course,
+            downloadUrl,
+            fileName,
+            totalStudents: students.length,
+          },
+        ],
+        totalStudents: students.length,
+        reportInfo: {
+          course: course.course,
+          management: management.management,
+          trimester: trimester || "ANUAL",
+          generatedAt: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      console.error("❌ Error generando boletín:", error);
+      throw error;
+    }
+  }
+
+  private async calculateStudentGradesForBoletin(
+    studentId: number,
+    assignments: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const studentGrades = [];
+
+    // Obtener dimensiones para el cálculo de notas
+    const dimensions = await this.db.dimension.findMany();
+
+    for (const assignment of assignments) {
+      console.log(
+        `📚 Calculando notas para materia: ${assignment.subject.subject}`
+      );
+
+      const subjectGrades = {
+        assignment,
+        trimesters: {
+          Q1: {
+            saber: 0,
+            hacer: 0,
+            ser: 0,
+            decidir: 0,
+            autoevaluacion: 0,
+            total: 0,
+          },
+          Q2: {
+            saber: 0,
+            hacer: 0,
+            ser: 0,
+            decidir: 0,
+            autoevaluacion: 0,
+            total: 0,
+          },
+          Q3: {
+            saber: 0,
+            hacer: 0,
+            ser: 0,
+            decidir: 0,
+            autoevaluacion: 0,
+            total: 0,
+          },
+        },
+        finalAverage: 0,
+      };
+
+      // Calcular notas por trimestre usando la misma lógica del centralizador
+      for (const quarter of ["Q1", "Q2", "Q3"]) {
+        const trimesterGrades = await this.calculateTrimesterGrades(
+          studentId,
+          assignment.subject_id,
+          assignment.management_id,
+          quarter,
+          dimensions
+        );
+        subjectGrades.trimesters[quarter] = trimesterGrades;
+      }
+
+      // Calcular promedio final de la materia
+      const totalTrimesters = Object.values(subjectGrades.trimesters);
+      subjectGrades.finalAverage =
+        totalTrimesters.reduce((sum, t: any) => sum + t.total, 0) /
+        totalTrimesters.length;
+
+      console.log(
+        `📊 Promedio final de ${assignment.subject.subject}: ${subjectGrades.finalAverage}`
+      );
+
+      studentGrades.push(subjectGrades);
+    }
+
+    return studentGrades;
+  }
+
+  private async generateAllBoletinesPDF(
+    allStudentGrades: any[],
+    assignments: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ): Promise<Buffer> {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    // Configurar fuente
+    doc.setFont("helvetica");
+
+    let isFirstPage = true;
+    let boletinesInCurrentPage = 0;
+
+    // Generar boletín para cada estudiante
+    for (let i = 0; i < allStudentGrades.length; i++) {
+      const { student, grades } = allStudentGrades[i];
+
+      // Agregar nueva página si ya hay 2 boletines en la página actual
+      if (boletinesInCurrentPage >= 2) {
+        doc.addPage();
+        boletinesInCurrentPage = 0;
+      }
+
+      // Si no es el primer boletín y es el segundo en la página, agregar espacio
+      if (boletinesInCurrentPage === 1) {
+        // El segundo boletín comenzará más abajo en la página
+        // Se ajustará automáticamente con startY en setupIndividualBoletin
+      }
+
+      isFirstPage = false;
+
+      // Generar boletín individual
+      this.setupIndividualBoletin(
+        doc,
+        student,
+        grades,
+        course,
+        management,
+        trimester,
+        boletinesInCurrentPage // Pasamos la posición en la página
+      );
+
+      boletinesInCurrentPage++;
+    }
+
+    // Convertir a buffer
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    return pdfBuffer;
+  }
+
+  private setupIndividualBoletin(
+    doc: jsPDF,
+    student: any,
+    studentGrades: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL",
+    positionInPage: number = 0
+  ) {
+    // Crear una tabla completa que incluya todo el boletín
+    this.createCompleteBoletinTable(
+      doc,
+      student,
+      studentGrades,
+      course,
+      management,
+      trimester,
+      positionInPage
+    );
+  }
+
+  private createCompleteBoletinTable(
+    doc: jsPDF,
+    student: any,
+    studentGrades: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL",
+    positionInPage: number = 0
+  ) {
+    // Calcular posición Y inicial basada en la posición en la página
+    const startY = positionInPage === 0 ? 25 : 150; // Primera posición: 25mm, segunda: 150mm
+
+    // Calcular promedios
+    const totalQ1 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q1.total, 0) /
+      studentGrades.length;
+    const totalQ2 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q2.total, 0) /
+      studentGrades.length;
+    const totalQ3 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q3.total, 0) /
+      studentGrades.length;
+    const promedioGeneral = (totalQ1 + totalQ2 + totalQ3) / 3;
+
+    // Calcular áreas reprobadas por trimestre
+    const areasReprobadasQ1 = studentGrades.filter(
+      (sg) => sg.trimesters.Q1.total < 51
+    ).length;
+    const areasReprobadasQ2 = studentGrades.filter(
+      (sg) => sg.trimesters.Q2.total < 51
+    ).length;
+    const areasReprobadasQ3 = studentGrades.filter(
+      (sg) => sg.trimesters.Q3.total < 51
+    ).length;
+
+    // Crear tabla principal del boletín
+    const tableData: any[] = [];
+
+    // Fila 1: Título "BOLETÍN DE NOTAS" y gestión
+    tableData.push([
+      {
+        content: "BOLETÍN DE NOTAS",
+        colSpan: 4,
+        styles: {
+          fontSize: 12, // Reducido de 14 para mayor compacidad
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [255, 255, 255],
+        },
+      },
+      {
+        content: `GESTIÓN: ${management.management}`,
+        styles: {
+          fontSize: 8, // Reducido de 9 para mayor compacidad
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [144, 238, 144],
+        },
+      },
+    ]);
+
+    // Fila 2: Información del estudiante
+    tableData.push([
+      {
+        content: "APELLIDOS Y NOMBRE(S)",
+        styles: {
+          fontSize: 8, // Reducido de 9 para mayor compacidad
+          fontStyle: "bold",
+          halign: "left",
+          fillColor: [240, 240, 240],
+        },
+      },
+      {
+        content: `${student.person.lastname} ${student.person.name}`,
+        colSpan: 2,
+        styles: { fontSize: 8, fontStyle: "bold", halign: "left" }, // Reducido para mayor compacidad
+      },
+      {
+        content: `CURSO: 5° "${course.course}" PRIMARIA`,
+        styles: {
+          fontSize: 8, // Reducido más para que quepa
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [144, 238, 144],
+        },
+      },
+      {
+        content: "1",
+        styles: {
+          fontSize: 14, // Reducido de 16
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [144, 238, 144],
+        },
+      },
+    ]);
+
+    // Fila 3: Encabezado "ÁREAS CURRICULARES" y "VALORACIÓN CUANTITATIVA"
+    tableData.push([
+      {
+        content: "ÁREAS CURRICULARES",
+        styles: {
+          fontSize: 9, // Reducido de 10
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "VALORACIÓN CUANTITATIVA",
+        colSpan: 4,
+        styles: {
+          fontSize: 9, // Reducido de 10
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+    ]);
+
+    // Fila 4: Subencabezados de trimestres
+    tableData.push([
+      { content: "", styles: { fillColor: [200, 200, 200] } },
+      {
+        content: "1° TRIM",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "2° TRIM",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "3° TRIM",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "PROMEDIO ANUAL",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+    ]);
+
+    // Agregar materias con colores para notas reprobadas
+    studentGrades.forEach((subjectGrade) => {
+      const q1Grade = Math.round(subjectGrade.trimesters.Q1.total);
+      const q2Grade = Math.round(subjectGrade.trimesters.Q2.total);
+      const q3Grade = Math.round(subjectGrade.trimesters.Q3.total);
+      const finalGrade = Math.round(subjectGrade.finalAverage);
+
+      tableData.push([
+        subjectGrade.assignment.subject.subject.toUpperCase(),
+        {
+          content: q1Grade.toString(),
+          styles: {
+            halign: "center",
+            textColor: q1Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+        {
+          content: q2Grade.toString(),
+          styles: {
+            halign: "center",
+            textColor: q2Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+        {
+          content: q3Grade.toString(),
+          styles: {
+            halign: "center",
+            textColor: q3Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+        {
+          content: finalGrade.toString(),
+          styles: {
+            halign: "center",
+            textColor: finalGrade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+      ]);
+    });
+
+    // Fila de promedio trimestral
+    tableData.push([
+      {
+        content: "PROMEDIO TRIMESTRAL:",
+        styles: { fontStyle: "bold", fillColor: [245, 245, 245] },
+      },
+      {
+        content: Math.round(totalQ1).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+      {
+        content: Math.round(totalQ2).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+      {
+        content: Math.round(totalQ3).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+      {
+        content: Math.round(promedioGeneral).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+    ]);
+
+    // Fila de áreas reprobadas por trimestre
+    tableData.push([
+      { content: "Total - Áreas Reprobadas", styles: { fontStyle: "bold" } },
+      {
+        content: areasReprobadasQ1.toString(),
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+      {
+        content: areasReprobadasQ2.toString(),
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+      {
+        content: areasReprobadasQ3.toString(),
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+      {
+        content: "-",
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+    ]);
+
+    // Generar la tabla con anchos optimizados para A4
+    autoTable(doc, {
+      body: tableData,
+      startY: startY,
+      styles: {
+        fontSize: 7, // Reducido de 8 para que sea más compacto
+        cellPadding: 1.5, // Reducido de 2 para menos espacio
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5,
+        halign: "center",
+      },
+      columnStyles: {
+        0: { cellWidth: 70, halign: "left" }, // Áreas curriculares más compacta
+        1: { cellWidth: 22 }, // 1° TRIM
+        2: { cellWidth: 22 }, // 2° TRIM
+        3: { cellWidth: 22 }, // 3° TRIM
+        4: { cellWidth: 28 }, // PROMEDIO ANUAL
+      },
+      margin: { left: 15, right: 15 }, // Márgenes más pequeños
+      theme: "grid",
+      tableWidth: "wrap", // Ajuste automático
+    });
+  }
+
+  private setupBoletinTableNew(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const startY = 115;
+
+    // Preparar encabezados y datos de la tabla
+    const headers = [
+      "ÁREAS CURRICULARES",
+      "1° TRIM",
+      "2° TRIM",
+      "3° TRIM",
+      "PROMEDIO FINAL",
+    ];
+    const tableData: any[] = [];
+
+    // Agregar datos de cada materia
+    studentGrades.forEach((subjectGrade) => {
+      const row = [
+        subjectGrade.assignment.subject.subject.toUpperCase(),
+        Math.round(subjectGrade.trimesters.Q1.total).toString(),
+        Math.round(subjectGrade.trimesters.Q2.total).toString(),
+        Math.round(subjectGrade.trimesters.Q3.total).toString(),
+        Math.round(subjectGrade.finalAverage).toString(),
+      ];
+      tableData.push(row);
+    });
+
+    // Calcular promedios trimestrales
+    const totalQ1 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q1.total, 0) /
+      studentGrades.length;
+    const totalQ2 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q2.total, 0) /
+      studentGrades.length;
+    const totalQ3 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q3.total, 0) /
+      studentGrades.length;
+    const promedioGeneral = (totalQ1 + totalQ2 + totalQ3) / 3;
+
+    // Agregar fila de promedio trimestral
+    tableData.push([
+      "PROMEDIO TRIMESTRAL:",
+      Math.round(totalQ1).toString(),
+      Math.round(totalQ2).toString(),
+      Math.round(totalQ3).toString(),
+      Math.round(promedioGeneral).toString(),
+    ]);
+
+    // Generar tabla
+    autoTable(doc, {
+      head: [headers],
+      body: tableData,
+      startY: startY,
+      styles: {
+        fontSize: 10,
+        cellPadding: 3,
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: [200, 200, 200],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+      },
+      columnStyles: {
+        0: { cellWidth: 80, halign: "left" },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 35 },
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
+      margin: { left: 20, right: 20 },
+      // Estilo especial para la última fila (promedio)
+      didParseCell: function (data) {
+        if (data.row.index === tableData.length - 1) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = [220, 220, 220];
+        }
+      },
+    });
+  }
+
+  private setupBoletinFooterNew(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+
+    // Calcular promedio final
+    const promedioFinal =
+      studentGrades.reduce((sum, sg) => sum + sg.finalAverage, 0) /
+      studentGrades.length;
+
+    // Calcular áreas reprobadas
+    const areasReprobadas = studentGrades.filter(
+      (sg) => sg.finalAverage < 51
+    ).length;
+
+    // Situación académica
+    const situacion = promedioFinal >= 51 ? "APROBADO" : "REPROBADO";
+    const colorSituacion = promedioFinal >= 51 ? [0, 128, 0] : [255, 0, 0];
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+
+    // Total áreas reprobadas
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total - Áreas Reprobadas: ${areasReprobadas}`, 20, finalY);
+
+    // Promedio final
+    doc.text(`PROMEDIO FINAL: ${Math.round(promedioFinal)}`, 20, finalY + 15);
+
+    // Situación
+    doc.setTextColor(colorSituacion[0], colorSituacion[1], colorSituacion[2]);
+    doc.text(`SITUACIÓN: ${situacion}`, 120, finalY + 15);
+
+    // Restablecer color
+    doc.setTextColor(0, 0, 0);
+
+    // Fecha de generación
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const fecha = new Date().toLocaleDateString("es-ES");
+    doc.text(`Generado el: ${fecha}`, 20, finalY + 35);
+  }
+
+  private async generateBoletinPDF(
+    student: any,
+    studentGrades: any[],
+    assignments: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ): Promise<Buffer> {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    // Configurar fuente
+    doc.setFont("helvetica");
+
+    // Encabezado del boletín
+    this.setupBoletinHeader(doc, student, course, management, trimester);
+
+    // Tabla de materias y calificaciones
+    this.setupBoletinTable(doc, studentGrades, trimester);
+
+    // Promedio trimestral y observaciones
+    this.setupBoletinFooter(doc, studentGrades, trimester);
+
+    // Convertir a buffer
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    return pdfBuffer;
+  }
+
+  private setupBoletinHeader(
+    doc: jsPDF,
+    student: any,
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    // Título principal
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("BOLETÍN DE CALIFICACIONES", 105, 20, { align: "center" });
+
+    // Información del estudiante
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+
+    // Nombre del estudiante
+    doc.text("APELLIDOS Y NOMBRE(S):", 20, 40);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${student.person.lastname} ${student.person.name}`, 20, 50);
+
+    // Curso y trimestre
+    doc.setFont("helvetica", "normal");
+    doc.text("CURSO:", 140, 40);
+    doc.setFont("helvetica", "bold");
+    doc.text(`5° "${course.course}"`, 140, 50);
+    doc.text("PRIMARIA", 140, 58);
+
+    // Período
+    const trimesterText =
+      trimester === "ANUAL"
+        ? "ANUAL"
+        : trimester === "Q1"
+        ? "1° TRIM"
+        : trimester === "Q2"
+        ? "2° TRIM"
+        : "3° TRIM";
+
+    doc.setFont("helvetica", "normal");
+    doc.text("PERÍODO:", 140, 70);
+    doc.setFont("helvetica", "bold");
+    doc.text(trimesterText, 140, 78);
+
+    // Gestión
+    doc.setFont("helvetica", "normal");
+    doc.text("GESTIÓN:", 140, 90);
+    doc.setFont("helvetica", "bold");
+    doc.text(management.management.toString(), 140, 98);
+  }
+
+  private setupBoletinTable(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const startY = 115;
+
+    // Preparar datos de la tabla
+    const headers = ["ÁREAS CURRICULARES"];
+    const columnStyles: any = { 0: { cellWidth: 120 } };
+
+    if (trimester === "ANUAL") {
+      headers.push("1° TRIM", "2° TRIM", "3° TRIM", "PROMEDIO ANUAL");
+      columnStyles[1] = { cellWidth: 20 };
+      columnStyles[2] = { cellWidth: 20 };
+      columnStyles[3] = { cellWidth: 20 };
+      columnStyles[4] = { cellWidth: 25 };
+    } else {
+      headers.push("VALORACIÓN CUANTITATIVA");
+      columnStyles[1] = { cellWidth: 65 };
+    }
+
+    const tableData: any[] = [];
+
+    // Agregar materias
+    studentGrades.forEach((subjectGrade) => {
+      const row = [subjectGrade.assignment.subject.subject.toUpperCase()];
+
+      if (trimester === "ANUAL") {
+        row.push(
+          Math.round(subjectGrade.trimesters.Q1.total).toString(),
+          Math.round(subjectGrade.trimesters.Q2.total).toString(),
+          Math.round(subjectGrade.trimesters.Q3.total).toString(),
+          Math.round(subjectGrade.finalAverage).toString()
+        );
+      } else {
+        const trimesterGrade = trimester
+          ? subjectGrade.trimesters[trimester].total
+          : 0;
+        row.push(Math.round(trimesterGrade).toString());
+      }
+
+      tableData.push(row);
+    });
+
+    // Calcular promedio trimestral
+    let promedioTotal = 0;
+    if (trimester === "ANUAL") {
+      const totalQ1 =
+        studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q1.total, 0) /
+        studentGrades.length;
+      const totalQ2 =
+        studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q2.total, 0) /
+        studentGrades.length;
+      const totalQ3 =
+        studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q3.total, 0) /
+        studentGrades.length;
+      const promedioAnual = (totalQ1 + totalQ2 + totalQ3) / 3;
+
+      tableData.push([
+        "PROMEDIO TRIMESTRAL:",
+        Math.round(totalQ1).toString(),
+        Math.round(totalQ2).toString(),
+        Math.round(totalQ3).toString(),
+        Math.round(promedioAnual).toString(),
+      ]);
+      promedioTotal = promedioAnual;
+    } else {
+      const promedioTrimestre =
+        studentGrades.reduce((sum, sg) => {
+          const grade = trimester ? sg.trimesters[trimester].total : 0;
+          return sum + grade;
+        }, 0) / studentGrades.length;
+
+      tableData.push([
+        "PROMEDIO TRIMESTRAL:",
+        Math.round(promedioTrimestre).toString(),
+      ]);
+      promedioTotal = promedioTrimestre;
+    }
+
+    // Agregar fila de áreas reprobadas
+    const areasReprobadas = studentGrades.filter((sg) => {
+      if (trimester === "ANUAL") {
+        return sg.finalAverage < 51;
+      } else {
+        const grade = trimester ? sg.trimesters[trimester].total : 0;
+        return grade < 51;
+      }
+    }).length;
+
+    if (trimester === "ANUAL") {
+      tableData.push([
+        "Total - Áreas Reprobadas",
+        areasReprobadas.toString(),
+        "",
+        "",
+        "",
+      ]);
+    } else {
+      tableData.push(["Total - Áreas Reprobadas", areasReprobadas.toString()]);
+    }
+
+    // Generar tabla
+    autoTable(doc, {
+      head: [headers],
+      body: tableData,
+      startY: startY,
+      styles: {
+        fontSize: 10,
+        cellPadding: 3,
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: [200, 200, 200],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+      },
+      columnStyles: columnStyles,
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
+      margin: { left: 20, right: 20 },
+    });
+  }
+
+  private setupBoletinFooter(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+
+    // Calcular promedio final
+    let promedioFinal = 0;
+    if (trimester === "ANUAL") {
+      promedioFinal =
+        studentGrades.reduce((sum, sg) => sum + sg.finalAverage, 0) /
+        studentGrades.length;
+    } else {
+      promedioFinal =
+        studentGrades.reduce((sum, sg) => {
+          const grade = trimester ? sg.trimesters[trimester].total : 0;
+          return sum + grade;
+        }, 0) / studentGrades.length;
+    }
+
+    // Situación académica
+    const situacion = promedioFinal >= 51 ? "APROBADO" : "REPROBADO";
+    const colorSituacion = promedioFinal >= 51 ? [0, 128, 0] : [255, 0, 0];
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`PROMEDIO FINAL: ${Math.round(promedioFinal)}`, 20, finalY);
+
+    doc.setTextColor(colorSituacion[0], colorSituacion[1], colorSituacion[2]);
+    doc.text(`SITUACIÓN: ${situacion}`, 120, finalY);
+
+    // Restablecer color
+    doc.setTextColor(0, 0, 0);
+
+    // Fecha de generación
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const fecha = new Date().toLocaleDateString("es-ES");
+    doc.text(`Generado el: ${fecha}`, 20, finalY + 20);
+  }
+
+  private async uploadBoletinToFirebase(
+    buffer: Buffer,
+    fileName: string
+  ): Promise<string> {
+    try {
+      const storageRef = ref(this.storage, `reports/boletines/${fileName}`);
+      const snapshot = await uploadBytes(storageRef, buffer);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("Error uploading boletin to Firebase:", error);
+      throw new Error("Error al subir el boletín a Firebase");
     }
   }
 }

@@ -35,5 +35,17 @@ export const reportsRouter = (() => {
     reportsController.generateCentralizadorAnual.bind(reportsController)
   );
 
+  // Boletines - Para todos los estudiantes de un curso
+  router.get(
+    "/boletines/course/:courseId/management/:managementId",
+    reportsController.generateBoletin.bind(reportsController)
+  );
+
+  // Boletín individual - Para un estudiante específico
+  router.get(
+    "/boletin/course/:courseId/management/:managementId/student/:studentId",
+    reportsController.generateBoletin.bind(reportsController)
+  );
+
   return router;
 })();
