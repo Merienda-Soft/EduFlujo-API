@@ -2,13 +2,13 @@ import Database from '../../../shared/database/connection';
 
 export class AssignmentService {
 
-  async createAssignments(assignmentsData: { course_id: number; professor_id: number; management_id: number; subject_id: number }[]) {
+  async createAssignments(assignmentsData: { course_id: number; professor_id: number; management_id: number; subject_id: number; created_by?: number }[]) {
     const db = Database.getInstance();
     console.log("ASIGNACIONES", assignmentsData);
     return await db.$transaction(async (transaction) => {
       const assignments = [];
   
-      for (const { course_id, professor_id, subject_id, management_id } of assignmentsData) {
+      for (const { course_id, professor_id, subject_id, management_id, created_by } of assignmentsData) {
         const assignment = await transaction.assignment.create({
           data: {
             course_id,
@@ -16,7 +16,8 @@ export class AssignmentService {
             subject_id,
             management_id,
             status: 1,
-            quarter: null, 
+            quarter: null,
+            created_by: created_by || null,
           },
         });
         assignments.push(assignment);
@@ -26,72 +27,15 @@ export class AssignmentService {
     });
   }
 
-  /*async updateAssignmentsByProfessor(
-    courseId: number,
-    oldProfessorId: number,
-    newProfessorId: number,
-    value: number // 1 = cambio permanente, 2 = sustitución temporal
-  ) {
-    const db = Database.getInstance();
-  
-    return await db.$transaction(async (transaction) => {
-      // Get the subjects assigned to the old professor in the course
-      const subjects = await transaction.assignment.findMany({
-        where: {
-          course_id: courseId,
-          professor_id: oldProfessorId,
-          status: 1,
-        },
-        select: { subject_id: true },
-      });
-  
-      const subjectIds = subjects.map((assignment) => assignment.subject_id);
-  
-      if (subjectIds.length === 0) {
-        throw new Error('El profesor no tiene materias activas en este curso.');
-      }
-  
-      // Update the old assignments to absent (status 3)
-      await transaction.assignment.updateMany({
-        where: {
-          course_id: courseId,
-          professor_id: oldProfessorId,
-          subject_id: { in: subjectIds },
-          status: 1,
-        },
-        data: {
-          status: 3,
-        },
-      });
-  
-      // Create new assignments for the new professor
-      const newAssignments = [];
-      for (const subjectId of subjectIds) {
-        const newAssignment = await transaction.assignment.create({
-          data: {
-            course_id: courseId,
-            professor_id: newProfessorId,
-            subject_id: subjectId,
-            status: value, 
-            quarter: null, 
-          },
-        });
-        newAssignments.push(newAssignment);
-      }
-  
-      return newAssignments;
-    });
-  }*/
-
   async updateAssignmentsById(
-      updates: { assignmentId: number; newProfessorId: number }[]
+      updates: { assignmentId: number; newProfessorId: number; updated_by?: number }[]
     ) {
       const db = Database.getInstance();
     
       return await db.$transaction(async (transaction) => {
         const updatedAssignments = [];
     
-        for (const { assignmentId, newProfessorId } of updates) {
+        for (const { assignmentId, newProfessorId, updated_by } of updates) {
           // Fetch the current assignment by its ID
           const currentAssignment = await transaction.assignment.findUnique({
             where: { id: assignmentId },
@@ -104,7 +48,10 @@ export class AssignmentService {
     
           const updatedAssignment = await transaction.assignment.update({
             where: { id: assignmentId },
-            data: { professor_id: newProfessorId },
+            data: { 
+              professor_id: newProfessorId,
+              updated_by: updated_by || null,
+            },
           });
     
           updatedAssignments.push(updatedAssignment);
@@ -114,7 +61,7 @@ export class AssignmentService {
       });
   }
 
-  async reactivateAssignments(courseId: number, professorId: number) {
+  async reactivateAssignments(courseId: number, professorId: number, updated_by?: number) {
     const db = Database.getInstance();
   
     return await db.$transaction(async (transaction) => {
@@ -126,7 +73,8 @@ export class AssignmentService {
           status: 3,
         },
         data: {
-          status: 1, 
+          status: 1,
+          updated_by: updated_by || null,
         },
       });
   
@@ -147,7 +95,8 @@ export class AssignmentService {
           },
         },
         data: {
-          status: 0, 
+          status: 0,
+          updated_by: updated_by || null,
         },
       });
   
@@ -162,11 +111,13 @@ export class AssignmentService {
       where: {
         course_id: courseId,
         status: { in: [1, 2] },
+        deleted_at: null, 
       },
       select: {
         id: true,
         subject_id: true,
         professor_id: true,
+        status: true,
       },
     });
   }

@@ -17,12 +17,17 @@ export class AssignmentController {
   async createAssignments(req: Request, res: Response) {
     try {
       const assignmentsData = req.body; 
-  
+      const created_by = req.body.created_by; 
       if (!Array.isArray(assignmentsData)) {
         return res.status(400).json({ message: 'Invalid request format. Expected an array of assignments.' });
       }
+
+      const assignmentsWithAudit = assignmentsData.map(assignment => ({
+        ...assignment,
+        created_by: created_by
+      }));
   
-      const assignments = await this.assignmentService.createAssignments(assignmentsData);
+      const assignments = await this.assignmentService.createAssignments(assignmentsWithAudit);
       res.status(201).json(assignments);
     } catch (error) {
       this.handleError(res, error);
@@ -31,13 +36,19 @@ export class AssignmentController {
 
   async updateAssignments(req: Request, res: Response) {
     try {
-      const updates = req.body; // array of { assignmentId, newProfessorId }
+      const updates = req.body.updates; // array of { assignmentId, newProfessorId }
+      const updated_by = req.body.updated_by; 
       
       if (!Array.isArray(updates)) {
         return res.status(400).json({ message: 'Invalid request format. Expected an array of updates.' });
       }
+
+      const updatesWithAudit = updates.map(update => ({
+        ...update,
+        updated_by: updated_by
+      }));
   
-      const updatedAssignments = await this.assignmentService.updateAssignmentsById(updates);
+      const updatedAssignments = await this.assignmentService.updateAssignmentsById(updatesWithAudit);
       res.status(200).json(updatedAssignments);
     } catch (error) {
       this.handleError(res, error);
@@ -46,10 +57,11 @@ export class AssignmentController {
 
   async reactivateAssignments(req: Request, res: Response) {
     try {
-      const { courseId, professorId } = req.body;
+      const { courseId, professorId, updated_by } = req.body;
       const result = await this.assignmentService.reactivateAssignments(
         Number(courseId),
-        Number(professorId)
+        Number(professorId),
+        updated_by
       );
       res.status(200).json(result);
     } catch (error) {

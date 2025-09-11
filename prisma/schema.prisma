@@ -10,11 +10,17 @@ datasource db {
 model Assignment {
   id            Int         @id @default(autoincrement()) @map("_id")
   quarter       String?
-  status        Int?
+  status        Int?        @default(1)
   course_id     Int?
   professor_id  Int?
   management_id Int?
   subject_id    Int?
+  created_at    DateTime    @default(now())
+  created_by    Int?
+  updated_at    DateTime    @updatedAt
+  updated_by    Int?
+  deleted_at    DateTime?
+  deleted_by    Int?
   course        Course?     @relation(fields: [course_id], references: [id])
   management    Management? @relation(fields: [management_id], references: [id])
   professor     Professor?  @relation(fields: [professor_id], references: [id])
@@ -29,6 +35,11 @@ model Attendance {
   subject_id      Int?
   professor_id    Int?
   course_id       Int?
+  status          Int?               @default(1)
+  created_at      DateTime           @default(now())
+  created_by      Int?
+  updated_at      DateTime           @updatedAt
+  updated_by      Int?
   course          Course?            @relation(fields: [course_id], references: [id])
   management      Management?        @relation(fields: [management_id], references: [id])
   professor       Professor?         @relation(fields: [professor_id], references: [id])
@@ -40,6 +51,11 @@ model AttendanceRecord {
   attendance_id     Int
   student_id        Int
   status_attendance String?    @db.Char(10)
+  status            Int?       @default(1)
+  created_at        DateTime   @default(now())
+  created_by        Int?
+  updated_at        DateTime   @updatedAt
+  updated_by        Int?
   attendance        Attendance @relation(fields: [attendance_id], references: [id])
   student           Student    @relation(fields: [student_id], references: [id])
 
@@ -54,6 +70,11 @@ model Content {
   file          Json?
   submitted_at  DateTime?   @default(now())
   last_update   DateTime?   @default(now())
+  status        Int?        @default(1)
+  created_at    DateTime    @default(now())
+  created_by    Int?
+  updated_at    DateTime    @updatedAt
+  updated_by    Int?
   course        Course?     @relation(fields: [course_id], references: [id])
   management    Management? @relation(fields: [management_id], references: [id])
   subject       Subject?    @relation(fields: [subject_id], references: [id])
@@ -64,9 +85,13 @@ model Course {
   parallel      String?        @db.Char(10)
   course        String?
   last_update   DateTime?
-  status        Int?
+  status        Int?           @default(1)
   degree_id     Int?
   management_id Int?
+  created_at    DateTime       @default(now())
+  created_by    Int?
+  updated_at    DateTime       @updatedAt
+  updated_by    Int?
   assignments   Assignment[]
   attendances   Attendance[]
   contents      Content[]
@@ -80,24 +105,39 @@ model Course {
 }
 
 model Degree {
-  id      Int      @id @default(autoincrement()) @map("_id")
-  degree  String?
-  courses Course[]
+  id         Int      @id @default(autoincrement()) @map("_id")
+  degree     String?
+  status     Int?     @default(1)
+  created_at DateTime @default(now())
+  created_by Int?
+  updated_at DateTime @updatedAt
+  updated_by Int?
+  courses    Course[]
 }
 
 model Departament {
   id          Int        @id @default(autoincrement()) @map("_id")
   departament String?
   country_id  Int?
+  status      Int?       @default(1)
+  created_at  DateTime   @default(now())
+  created_by  Int?
+  updated_at  DateTime   @updatedAt
+  updated_by  Int?
   country     Country?   @relation(fields: [country_id], references: [id])
   provinces   Province[]
 }
 
 model Dimension {
-  id        Int     @id @default(autoincrement()) @map("_id")
-  dimension String?
-  value     Int?
-  tasks     Task[]
+  id         Int     @id @default(autoincrement()) @map("_id")
+  dimension  String?
+  value      Int?
+  status     Int?    @default(1)
+  created_at DateTime @default(now())
+  created_by Int?
+  updated_at DateTime @updatedAt
+  updated_by Int?
+  tasks      Task[]
 }
 
 model Mark {
@@ -106,6 +146,11 @@ model Mark {
   student_id    Int?
   course_id     Int?
   management_id Int?
+  status        Int?        @default(1)
+  created_at    DateTime    @default(now())
+  created_by    Int?
+  updated_at    DateTime    @updatedAt
+  updated_by    Int?
   course        Course?     @relation(fields: [course_id], references: [id])
   management    Management? @relation(fields: [management_id], references: [id])
   student       Student?    @relation(fields: [student_id], references: [id])
@@ -118,6 +163,11 @@ model MarkSubject {
   course_id     Int?
   subject_id    Int?
   management_id Int?
+  status        Int?        @default(1)
+  created_at    DateTime    @default(now())
+  created_by    Int?
+  updated_at    DateTime    @updatedAt
+  updated_by    Int?
   course        Course?     @relation(fields: [course_id], references: [id])
   management    Management? @relation(fields: [management_id], references: [id])
   student       Student?    @relation(fields: [student_id], references: [id])
@@ -127,7 +177,7 @@ model MarkSubject {
 model Management {
   id                   Int            @id @default(autoincrement()) @map("_id")
   management           Int?
-  status               Int?
+  status               Int?           @default(1)
   start_date           DateTime?
   end_date             DateTime?
   first_quarter_start  DateTime?
@@ -136,6 +186,10 @@ model Management {
   second_quarter_end   DateTime?
   third_quarter_start  DateTime?
   third_quarter_end    DateTime?
+  created_at           DateTime       @default(now())
+  created_by           Int?
+  updated_at           DateTime       @updatedAt
+  updated_by           Int?
   assignments          Assignment[]
   attendances          Attendance[]
   contents             Content[]
@@ -157,8 +211,12 @@ model Person {
   birth_date      DateTime?
   email           String?
   temp_password   String?
-  status          Int?
+  status          Int?       @default(1)
   town_id         Int?
+  created_at      DateTime   @default(now())
+  created_by      Int?
+  updated_at      DateTime   @updatedAt
+  updated_by      Int?
   town            Town?      @relation(fields: [town_id], references: [id])
   professor       Professor?
   student         Student?
@@ -169,7 +227,11 @@ model Professor {
   id          Int          @id
   is_tecnical Int?
   subjects    String?
-  status      Int?
+  status      Int?         @default(1)
+  created_at  DateTime     @default(now())
+  created_by  Int?
+  updated_at  DateTime     @updatedAt
+  updated_by  Int?
   assignments Assignment[]
   attendances Attendance[]
   person      Person       @relation(fields: [id], references: [id])
@@ -180,6 +242,11 @@ model Province {
   id             Int          @id @default(autoincrement()) @map("_id")
   province       String?
   departament_id Int?
+  status         Int?         @default(1)
+  created_at     DateTime     @default(now())
+  created_by     Int?
+  updated_at     DateTime     @updatedAt
+  updated_by     Int?
   departament    Departament? @relation(fields: [departament_id], references: [id])
   towns          Town[]
 }
@@ -189,25 +256,42 @@ model Registration {
   course_id     Int?
   student_id    Int?
   management_id Int?
+  status        Int?        @default(1)
+  created_at    DateTime    @default(now())
+  created_by    Int?
+  updated_at    DateTime    @updatedAt
+  updated_by    Int?
+  deleted_at    DateTime?
+  deleted_by    Int?
   course        Course?     @relation(fields: [course_id], references: [id])
   management    Management? @relation(fields: [management_id], references: [id])
   student       Student?    @relation(fields: [student_id], references: [id])
 }
 
 model Setting {
-  id                Int     @id @default(autoincrement())
+  id                Int      @id @default(autoincrement())
   institution_logo  String?
   institution_name  String?
   active_management Int?
   management_id     Int?
   tutor_access      Int?
   active_quarter    String?
+  status            Int?     @default(1)
+  created_at        DateTime @default(now())
+  created_by        Int?
+  updated_at        DateTime @updatedAt
+  updated_by        Int?
 }
 
 model Student {
   id              Int                @id
   matricula       String?
   rude            String?
+  status          Int?               @default(1)
+  created_at      DateTime           @default(now())
+  created_by      Int?
+  updated_at      DateTime           @updatedAt
+  updated_by      Int?
   attendances     AttendanceRecord[]
   marks           Mark[]
   marks_subject   MarkSubject[]
@@ -221,7 +305,11 @@ model Subject {
   id          Int           @id @default(autoincrement()) @map("_id")
   subject     String?
   is_tecnical Int?
-  status      Int?
+  status      Int?          @default(1)
+  created_at  DateTime      @default(now())
+  created_by  Int?
+  updated_at  DateTime      @updatedAt
+  updated_by  Int?
   assignments Assignment[]
   attendances Attendance[]
   contents    Content[]
@@ -235,6 +323,11 @@ model Curriculum {
   course_id     Int?
   subject_id    Int?
   management_id Int?
+  status        Int?        @default(1)
+  created_at    DateTime    @default(now())
+  created_by    Int?
+  updated_at    DateTime    @updatedAt
+  updated_by    Int?
   course        Course?     @relation(fields: [course_id], references: [id])
   management    Management? @relation(fields: [management_id], references: [id])
   subject       Subject?    @relation(fields: [subject_id], references: [id])
@@ -253,12 +346,15 @@ model Task {
   course_id         Int?
   quarter           String?
   type              Int?             @default(0)
-  status            Int?
-  create_date       DateTime?        @default(now())
-  last_update       DateTime?
-  deleted_at        DateTime?
+  status            Int?             @default(1)
   start_date        DateTime?
   end_date          DateTime?
+  created_at        DateTime         @default(now())
+  created_by        Int?
+  updated_at        DateTime         @updatedAt
+  updated_by        Int?
+  deleted_at        DateTime?
+  deleted_by        Int?
   course            Course?          @relation(fields: [course_id], references: [id])
   dimension         Dimension        @relation(fields: [dimension_id], references: [id])
   management        Management?      @relation(fields: [management_id], references: [id])
@@ -279,10 +375,14 @@ model TaskAssignment {
   submitted_at   DateTime? @default(now())
   last_update    DateTime?
   comment        String?
-  student        Student   @relation(fields: [student_id], references: [id])
-  task           Task      @relation(fields: [task_id], references: [id])
   evaluation_methodology  Json?
   type           Int?
+  created_at     DateTime  @default(now())
+  created_by     Int?
+  updated_at     DateTime  @updatedAt
+  updated_by     Int?
+  student        Student   @relation(fields: [student_id], references: [id])
+  task           Task      @relation(fields: [task_id], references: [id])
 
   @@id([task_id, student_id])
 }
@@ -291,6 +391,11 @@ model Town {
   id          Int       @id @default(autoincrement()) @map("_id")
   town        String?
   province_id Int?
+  status      Int?      @default(1)
+  created_at  DateTime  @default(now())
+  created_by  Int?
+  updated_at  DateTime  @updatedAt
+  updated_by  Int?
   persons     Person[]
   province    Province? @relation(fields: [province_id], references: [id])
 }
@@ -298,14 +403,23 @@ model Town {
 model Country {
   id           Int           @id @default(autoincrement()) @map("_id")
   country      String?
+  status       Int?          @default(1)
+  created_at   DateTime      @default(now())
+  created_by   Int?
+  updated_at   DateTime      @updatedAt
+  updated_by   Int?
   departaments Departament[]
 }
 
 model Tutor {
   id             Int         @id
-  status         Int?
+  status         Int?        @default(1)
   url_imagefront String?
   url_imageback  String?
+  created_at     DateTime    @default(now())
+  created_by     Int?
+  updated_at     DateTime    @updatedAt
+  updated_by     Int?
   person         Person      @relation(fields: [id], references: [id])
   students       Tutorship[]
 }
@@ -315,6 +429,11 @@ model Tutorship {
   student_id Int
   relacion   String
   createdAt  DateTime @default(now())
+  status     Int?     @default(1)
+  created_at DateTime @default(now())
+  created_by Int?
+  updated_at DateTime @updatedAt
+  updated_by Int?
   student    Student  @relation(fields: [student_id], references: [id])
   tutor      Tutor    @relation(fields: [tutor_id], references: [id])
 
@@ -329,6 +448,8 @@ model Notifications {
   created_date   DateTime @default(now()) @db.Timestamp(6)
   status         Int      @default(0)
   updated_at     DateTime @default(now()) @db.Timestamp(6)
+  created_at     DateTime @default(now())
+  created_by     Int?
 }
 
 model EvaluationTools {
@@ -336,5 +457,10 @@ model EvaluationTools {
   type          Int
   methodology   Json
   task_id Int?
+  status        Int?     @default(1)
+  created_at    DateTime @default(now())
+  created_by    Int?
+  updated_at    DateTime @updatedAt
+  updated_by    Int?
   task    Task? @relation(fields: [task_id], references: [id])
 }
