@@ -1,151 +1,152 @@
-import { PrismaClient } from '@prisma/client';
-import * as ExcelJS from 'exceljs';
-import { initializeApp } from 'firebase/app';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { PrismaClient } from "@prisma/client";
+import * as ExcelJS from "exceljs";
+import { initializeApp } from "firebase/app";
+import { getDownloadURL, getStorage, ref, uploadBytes } from "firebase/storage";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export class ReportsService {
-    private db: PrismaClient;
-    private storage: any;
+  private db: PrismaClient;
+  private storage: any;
 
-    constructor() {
-        this.db = new PrismaClient();
-        this.initializeFirebase();
+  constructor() {
+    this.db = new PrismaClient();
+    this.initializeFirebase();
+  }
+
+  private initializeFirebase() {
+    const firebaseConfig = {
+      apiKey: process.env.FIREBASE_API_KEY,
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.FIREBASE_APP_ID,
+    };
+
+    const app = initializeApp(firebaseConfig);
+    this.storage = getStorage(app);
+  }
+
+  async generateAttendanceReport(
+    courseId: number,
+    subjectId: number,
+    professorId: number,
+    managementId: number,
+    startDate?: string,
+    endDate?: string
+  ) {
+    try {
+      // 1. Obtener información básica
+      const [course, subject, professor, management] = await Promise.all([
+        this.getCourseInfo(courseId),
+        this.getSubjectInfo(subjectId),
+        this.getProfessorInfo(professorId),
+        this.getManagementInfo(managementId),
+      ]);
+
+      // 2. Obtener estudiantes del curso
+      const students = await this.getStudentsByCourse(courseId);
+
+      // 3. Obtener asistencias
+      const attendanceData = await this.getAttendanceData(
+        courseId,
+        subjectId,
+        professorId,
+        managementId,
+        startDate,
+        endDate
+      );
+
+      // 4. Determinar las fechas para la estructura
+      let reportStartDate: Date | undefined;
+      let reportEndDate: Date | undefined;
+
+      if (startDate && endDate) {
+        reportStartDate = new Date(startDate);
+        reportEndDate = new Date(endDate);
+      } else if (attendanceData.length > 0) {
+        const dates = attendanceData
+          .map((att) => att.attendance_date)
+          .filter(Boolean);
+        reportStartDate = new Date(Math.min(...dates.map((d) => d.getTime())));
+        reportEndDate = new Date(Math.max(...dates.map((d) => d.getTime())));
+      }
+
+      // 5. Procesar datos para el Excel
+      const processedData = this.processAttendanceDataWithDates(
+        students,
+        attendanceData,
+        reportStartDate,
+        reportEndDate
+      );
+
+      // 6. Generar archivo Excel
+      const excelBuffer = await this.createAttendanceExcel(
+        processedData,
+        course,
+        subject,
+        professor,
+        management,
+        startDate,
+        endDate
+      );
+
+      // 7. Subir a Firebase y obtener URL
+      const fileName = this.generateFileName(
+        course,
+        subject,
+        professor,
+        management
+      );
+      const downloadUrl = await this.uploadToFirebase(
+        new Uint8Array(excelBuffer),
+        fileName
+      );
+
+      return {
+        ok: true,
+        downloadUrl,
+        fileName,
+        totalStudents: students.length,
+        reportPeriod: {
+          startDate: startDate || "Febrero",
+          endDate: endDate || "Diciembre",
+        },
+      };
+    } catch (error) {
+      console.error("Error generating attendance report:", error);
+      throw new Error(
+        `Error al generar el reporte de asistencia: ${error.message}`
+      );
     }
+  }
 
-    private initializeFirebase() {
-        const firebaseConfig = {
-            apiKey: process.env.FIREBASE_API_KEY,
-            authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-            messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-            appId: process.env.FIREBASE_APP_ID
-        };
+  private async getCourseInfo(courseId: number) {
+    return await this.db.course.findUnique({
+      where: { id: courseId },
+      include: { degree: true },
+    });
+  }
 
-        const app = initializeApp(firebaseConfig);
-        this.storage = getStorage(app);
-    }
+  private async getSubjectInfo(subjectId: number) {
+    return await this.db.subject.findUnique({
+      where: { id: subjectId },
+    });
+  }
 
-    async generateAttendanceReport(courseId: number, subjectId: number, professorId: number, managementId: number, startDate?: string, endDate?: string) {
-        try {
-            // 1. Obtener información básica
-            const [course, subject, professor, management] = await Promise.all([
-                this.getCourseInfo(courseId),
-                this.getSubjectInfo(subjectId),
-                this.getProfessorInfo(professorId),
-                this.getManagementInfo(managementId)
-            ]);
+  private async getProfessorInfo(professorId: number) {
+    return await this.db.professor.findUnique({
+      where: { id: professorId },
+      include: { person: true },
+    });
+  }
 
-            // 2. Obtener estudiantes del curso
-            const students = await this.getStudentsByCourse(courseId);
-
-            // 3. Obtener asistencias
-            const attendanceData = await this.getAttendanceData(
-                courseId, 
-                subjectId, 
-                professorId, 
-                managementId,
-                startDate,
-                endDate
-            );
-
-            // 4. Determinar las fechas para la estructura
-            let reportStartDate: Date | undefined;
-            let reportEndDate: Date | undefined;
-
-            if (startDate && endDate) {
-                reportStartDate = new Date(startDate);
-                reportEndDate = new Date(endDate);
-            } else if (attendanceData.length > 0) {
-                // Si hay datos pero no se especificaron fechas, usar el rango de los datos
-                const dates = attendanceData.map(att => att.attendance_date).filter(Boolean);
-                reportStartDate = new Date(Math.min(...dates.map(d => d.getTime())));
-                reportEndDate = new Date(Math.max(...dates.map(d => d.getTime())));
-            }
-            // Si no hay fechas ni datos, processAttendanceData manejará el caso por defecto
-
-            // 5. Procesar datos para el Excel
-            const processedData = this.processAttendanceDataWithDates(students, attendanceData, reportStartDate, reportEndDate);
-
-            // 6. Generar archivo Excel
-            const excelBuffer = await this.createAttendanceExcel(
-                processedData,
-                course,
-                subject,
-                professor,
-                management,
-                startDate,
-                endDate
-            );
-
-            // 7. Subir a Firebase y obtener URL
-            const fileName = this.generateFileName(course, subject, professor, management);
-            const downloadUrl = await this.uploadToFirebase(new Uint8Array(excelBuffer), fileName);
-
-            return {
-                ok: true,
-                downloadUrl,
-                fileName,
-                totalStudents: students.length,
-                reportPeriod: {
-                    startDate: startDate || 'Febrero',
-                    endDate: endDate || 'Diciembre'
-                }
-            };
-
-        } catch (error) {
-            console.error('Error generating attendance report:', error);
-            throw new Error(`Error al generar el reporte de asistencia: ${error.message}`);
-        }
-    }
-
-    private async getCourseInfo(courseId: number) {
-        return await this.db.course.findUnique({
-            where: { id: courseId },
-            select: {
-                id: true,
-                course: true,
-                parallel: true
-            }
-        });
-    }
-
-    private async getSubjectInfo(subjectId: number) {
-        return await this.db.subject.findUnique({
-            where: { id: subjectId },
-            select: {
-                id: true,
-                subject: true
-            }
-        });
-    }
-
-    private async getProfessorInfo(professorId: number) {
-        return await this.db.professor.findUnique({
-            where: { id: professorId },
-            include: {
-                person: {
-                    select: {
-                        name: true,
-                        lastname: true,
-                        second_lastname: true
-                    }
-                }
-            }
-        });
-    }
-
-    private async getManagementInfo(managementId: number) {
-        return await this.db.management.findUnique({
-            where: { id: managementId },
-            select: {
-                id: true,
-                management: true,
-                start_date: true,
-                end_date: true
-            }
-        });
-    }
+  public async getManagementInfo(managementId: number) {
+    return await this.db.management.findUnique({
+      where: { id: managementId },
+    });
+  }
 
     private async getStudentsByCourse(courseId: number) {
         return await this.db.registration.findMany({
@@ -180,26 +181,27 @@ export class ReportsService {
         });
     }
 
-    private async getAttendanceData(courseId: number, subjectId: number, professorId: number, managementId: number, startDate?: string, endDate?: string) {
-        const whereClause: any = {
-            course_id: courseId,
-            subject_id: subjectId,
-            professor_id: professorId,
-            management_id: managementId
-        };
+  private async getAttendanceData(
+    courseId: number,
+    subjectId: number,
+    professorId: number,
+    managementId: number,
+    startDate?: string,
+    endDate?: string
+  ) {
+    const whereCondition: any = {
+      course_id: courseId,
+      subject_id: subjectId,
+      professor_id: professorId,
+      management_id: managementId,
+    };
 
-        if (startDate && endDate) {
-            whereClause.attendance_date = {
-                gte: new Date(startDate + 'T00:00:00.000Z'),
-                lte: new Date(endDate + 'T23:59:59.999Z')
-            };
-        }
-
-        console.log('Querying attendance with:', whereClause);
-
-        // Verificar primero qué campos tiene AttendanceRecord
-        const sampleRecord = await this.db.attendanceRecord.findFirst();
-        console.log('Sample AttendanceRecord structure:', sampleRecord);
+    if (startDate && endDate) {
+      whereCondition.attendance_date = {
+        gte: new Date(startDate),
+        lte: new Date(endDate),
+      };
+    }
 
         const attendanceRecords = await this.db.attendance.findMany({
             where: {
@@ -221,721 +223,2223 @@ export class ReportsService {
             ]
         });
 
-        console.log('Raw attendance records:', attendanceRecords.length);
-        if (attendanceRecords.length > 0) {
-            console.log('First attendance record sample:', JSON.stringify(attendanceRecords[0], null, 2));
-        }
-
-        // Obtener los attendance records para cada attendance
-        const attendanceWithRecords = await Promise.all(
-            attendanceRecords.map(async (attendance) => {
-                const records = await this.db.attendanceRecord.findMany({
-                    where: {
-                        attendance_id: attendance.id
-                    }
-                });
-
-                console.log(`Attendance ${attendance.id} (${attendance.attendance_date}) has ${records.length} records:`, records);
-                
-                // Crear estructura compatible con el código existente
-                const attendancesWithStatus = records.map(record => {
-                    // Si AttendanceRecord no tiene status, por ahora usar 'P' por defecto
-                    // Necesitarás revisar dónde está el status real en tu base de datos
-                    return {
-                        student_id: record.student_id,
-                        status_attendance: 'P' // TEMPORAL - necesitas encontrar el campo real
-                    };
-                });
-
-                return {
-                    ...attendance,
-                    attendances: attendancesWithStatus
-                };
-            })
-        );
-
-        return attendanceWithRecords;
+    console.log("Raw attendance records:", attendanceRecords.length);
+    if (attendanceRecords.length > 0) {
+      console.log(
+        "First attendance record sample:",
+        JSON.stringify(attendanceRecords[0], null, 2)
+      );
     }
 
-    private processAttendanceData(students: any[], attendanceData: any[]) {
-        if (!students || students.length === 0) {
-            // Aún necesitamos generar la estructura mensual para mostrar los encabezados
-            const currentYear = new Date().getFullYear();
-            const defaultStart = new Date(currentYear, 1, 1); // Febrero
-            const defaultEnd = new Date(currentYear, 11, 31); // Diciembre
-            const monthlyData = this.generateMonthlyStructure(defaultStart, defaultEnd);
-            
-            return {
-                students: [],
-                monthlyData: monthlyData,
-                summary: {
-                    totalStudents: 0,
-                    totalClasses: 0,
-                    overallAttendanceRate: '0'
-                }
-            };
-        }
-
-        // Crear mapa de asistencias por estudiante y fecha
-        const attendanceMap = new Map();
-        attendanceData.forEach(attendanceRecord => {
-            const date = attendanceRecord.attendance_date?.toISOString().split('T')[0];
-            if (date && attendanceRecord.attendances) {
-                attendanceRecord.attendances.forEach((record: any) => {
-                    const studentId = record.student_id;
-                    const key = `${studentId}-${date}`;
-                    attendanceMap.set(key, record.status_attendance);
-                });
-            }
+    // Obtener los attendance records para cada attendance
+    const attendanceWithRecords = await Promise.all(
+      attendanceRecords.map(async (attendance) => {
+        const records = await this.db.attendanceRecord.findMany({
+          where: {
+            attendance_id: attendance.id,
+          },
         });
 
-        // Determinar rango de fechas para la estructura mensual
-        let structureStartDate: Date;
-        let structureEndDate: Date;
+        console.log(
+          `Attendance ${attendance.id} (${attendance.attendance_date}) has ${records.length} records:`,
+          records
+        );
 
-        if (attendanceData.length > 0) {
-            // Si hay datos de asistencia, usar sus fechas para determinar el rango
-            const dates = attendanceData.map(att => att.attendance_date).filter(Boolean);
-            structureStartDate = new Date(Math.min(...dates.map(d => d.getTime())));
-            structureEndDate = new Date(Math.max(...dates.map(d => d.getTime())));
-        } else {
-            // Si no hay datos de asistencia, usar febrero a diciembre del año actual
-            const currentYear = new Date().getFullYear();
-            structureStartDate = new Date(currentYear, 1, 1); // Febrero
-            structureEndDate = new Date(currentYear, 11, 31); // Diciembre
-        }
-
-        // Generar estructura mensual
-        const monthlyData = this.generateMonthlyStructure(structureStartDate, structureEndDate);
-
-        // Procesar datos de estudiantes
-        const processedStudents = students.map(registration => {
-            const student = registration.student;
-            const studentMonthlyAttendance = monthlyData.map(month => {
-                const monthAttendances = month.workingDays.map(day => {
-                    if (day.date) {
-                        const key = `${student.id}-${day.date}`;
-                        return attendanceMap.get(key) || null;
-                    }
-                    return null;
-                });
-
-                // Calcular estadísticas del mes
-                const presentCount = monthAttendances.filter(att => att === 'Presente').length;
-                const absentCount = monthAttendances.filter(att => att === 'Ausente').length;
-                const lateCount = monthAttendances.filter(att => att === 'Tardanza').length;
-                const totalDaysWithData = monthAttendances.filter(att => att !== null).length;
-
-                return {
-                    month: month.month,
-                    year: month.year,
-                    attendances: monthAttendances,
-                    statistics: {
-                        present: presentCount,
-                        absent: absentCount,
-                        late: lateCount,
-                        totalDays: totalDaysWithData,
-                        percentage: totalDaysWithData > 0 ? ((presentCount + lateCount) / totalDaysWithData * 100).toFixed(1) : '0'
-                    }
-                };
-            });
-
-            // Calcular estadísticas totales del estudiante
-            const totalPresent = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.present, 0);
-            const totalAbsent = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.absent, 0);
-            const totalLate = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.late, 0);
-            const totalDays = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.totalDays, 0);
-
-            return {
-                student: {
-                    id: student.id,
-                    fullName: `${student.person?.lastname || ''} ${student.person?.second_lastname || ''} ${student.person?.name || ''}`.trim(),
-                    ci: student.person?.ci || 'Sin CI',
-                    rude: student.rude || 'Sin RUDE'
-                },
-                monthlyAttendance: studentMonthlyAttendance,
-                totalStatistics: {
-                    present: totalPresent,
-                    absent: totalAbsent,
-                    late: totalLate,
-                    totalDays: totalDays,
-                    percentage: totalDays > 0 ? ((totalPresent + totalLate) / totalDays * 100).toFixed(1) : '0'
-                }
-            };
+        // Crear estructura compatible con el código existente
+        const attendancesWithStatus = records.map((record) => {
+          return {
+            student_id: record.student_id,
+            status_attendance: this.mapAttendanceStatus(
+              record.status_attendance
+            ),
+          };
         });
 
         return {
-            students: processedStudents,
-            monthlyData: monthlyData,
-            summary: {
-                totalStudents: students.length,
-                totalClasses: monthlyData.reduce((sum, month) => sum + month.workingDays.filter(day => day.date).length, 0),
-                overallAttendanceRate: this.calculateOverallAttendanceRate(processedStudents)
-            }
+          ...attendance,
+          attendances: attendancesWithStatus,
         };
+      })
+    );
+
+    return attendanceWithRecords;
+  }
+
+  private mapAttendanceStatus(status: string): string {
+    if (!status) return "P";
+
+    // Limpiar espacios en blanco y convertir a uppercase
+    const cleanStatus = status.trim().toUpperCase();
+
+    switch (cleanStatus) {
+      case "A":
+        return "A"; // Ausente
+      case "P":
+        return "P"; // Presente
+      case "J":
+        return "L"; // Licencia (mapear J a L para compatibilidad)
+      case "L":
+        return "L"; // Licencia
+      case "T":
+        return "T"; // Tardanza
+      default:
+        return "P"; // Por defecto presente
+    }
+  }
+
+  private processAttendanceDataWithDates(
+    students: any[],
+    attendanceData: any[],
+    startDate?: Date,
+    endDate?: Date
+  ) {
+    if (!students || students.length === 0) {
+      const currentYear = new Date().getFullYear();
+      const defaultStart = new Date(currentYear, 1, 1); // Febrero
+      const defaultEnd = new Date(currentYear, 11, 31); // Diciembre
+      const monthlyData = this.generateMonthlyStructure(
+        defaultStart,
+        defaultEnd
+      );
+
+      return {
+        students: [],
+        monthlyData: monthlyData,
+        summary: {
+          totalStudents: 0,
+          totalClasses: 0,
+          overallAttendanceRate: "0",
+        },
+      };
     }
 
-    private processAttendanceDataWithDates(students: any[], attendanceData: any[], startDate?: Date, endDate?: Date) {
-        if (!students || students.length === 0) {
-            const currentYear = new Date().getFullYear();
-            const defaultStart = startDate || new Date(currentYear, 1, 1);
-            const defaultEnd = endDate || new Date(currentYear, 11, 31);
-            const monthlyData = this.generateMonthlyStructure(defaultStart, defaultEnd);
-            
-            return {
-                students: [],
-                monthlyData: monthlyData,
-                summary: {
-                    totalStudents: 0,
-                    totalClasses: 0,
-                    overallAttendanceRate: '0'
-                }
-            };
-        }
+    // Crear mapa de asistencias por estudiante y fecha
+    const attendanceMap = new Map();
+    attendanceData.forEach((attendanceRecord) => {
+      const date = attendanceRecord.attendance_date
+        ?.toISOString()
+        .split("T")[0];
+      if (date && attendanceRecord.attendances) {
+        attendanceRecord.attendances.forEach((record: any) => {
+          const studentId = record.student_id;
+          const key = `${studentId}-${date}`;
+          console.log(
+            `Setting attendance: ${key} = ${record.status_attendance}`
+          );
+          attendanceMap.set(key, record.status_attendance);
+        });
+      }
+    });
 
-        // Crear mapa de asistencias por estudiante y fecha
-        const attendanceMap = new Map();
-        
-        console.log('Raw attendance data:', attendanceData.length); // Debug
-        
-        attendanceData.forEach((attendanceRecord, index) => {
-            const date = attendanceRecord.attendance_date?.toISOString().split('T')[0];
-            console.log(`Attendance record ${index}:`, {
-                date,
-                hasAttendances: !!attendanceRecord.attendances,
-                attendancesCount: attendanceRecord.attendances?.length || 0
-            }); // Debug
-            
-            if (date && attendanceRecord.attendances) {
-                attendanceRecord.attendances.forEach((record: any) => {
-                    const studentId = record.student_id;
-                    const key = `${studentId}-${date}`;
-                    console.log(`Setting attendance: ${key} = ${record.status_attendance}`); // Debug
-                    attendanceMap.set(key, record.status_attendance);
-                });
+    console.log("Final attendance map size:", attendanceMap.size);
+    console.log(
+      "Sample attendance entries:",
+      Array.from(attendanceMap.entries()).slice(0, 10)
+    );
+
+    // Determinar rango de fechas para la estructura mensual
+    let structureStartDate: Date;
+    let structureEndDate: Date;
+
+    if (startDate && endDate) {
+      structureStartDate = startDate;
+      structureEndDate = endDate;
+    } else {
+      const currentYear = new Date().getFullYear();
+
+      if (attendanceData.length > 0) {
+        const firstDate = attendanceData[0].attendance_date;
+        const year = firstDate ? firstDate.getFullYear() : currentYear;
+        structureStartDate = new Date(year, 1, 1); // Febrero
+        structureEndDate = new Date(year, 11, 31); // Diciembre
+      } else {
+        structureStartDate = new Date(currentYear, 1, 1); // Febrero
+        structureEndDate = new Date(currentYear, 11, 31); // Diciembre
+      }
+    }
+
+    // Generar estructura mensual
+    const monthlyData = this.generateMonthlyStructure(
+      structureStartDate,
+      structureEndDate
+    );
+
+    // Procesar datos de estudiantes
+    const processedStudents = students.map((registration) => {
+      const student = registration.student;
+      const studentMonthlyAttendance = monthlyData.map((month) => {
+        const monthAttendances = month.workingDays.map((day) => {
+          if (day.date) {
+            const key = `${student.id}-${day.date}`;
+            const attendance = attendanceMap.get(key);
+            if (student.id === students[0]?.student?.id) {
+              console.log(
+                `Student ${student.id}, Date ${day.date}, Key: ${key}, Attendance: ${attendance}`
+              );
             }
+            return attendance || null;
+          }
+          return null;
         });
 
-        console.log('Final attendance map size:', attendanceMap.size); // Debug
-        console.log('Sample attendance entries:', Array.from(attendanceMap.entries()).slice(0, 10)); // Debug
-
-        // Determinar rango de fechas para la estructura mensual
-        let structureStartDate: Date;
-        let structureEndDate: Date;
-
-        if (startDate && endDate) {
-            structureStartDate = startDate;
-            structureEndDate = endDate;
-        } else {
-            const currentYear = new Date().getFullYear();
-            
-            if (attendanceData.length > 0) {
-                const firstDate = attendanceData[0].attendance_date;
-                const year = firstDate ? firstDate.getFullYear() : currentYear;
-                structureStartDate = new Date(year, 1, 1); // Febrero
-                structureEndDate = new Date(year, 11, 31); // Diciembre
-            } else {
-                structureStartDate = new Date(currentYear, 1, 1); // Febrero
-                structureEndDate = new Date(currentYear, 11, 31); // Diciembre
-            }
-        }
-
-        // Generar estructura mensual
-        const monthlyData = this.generateMonthlyStructure(structureStartDate, structureEndDate);
-
-        // Procesar datos de estudiantes
-        const processedStudents = students.map(registration => {
-            const student = registration.student;
-            const studentMonthlyAttendance = monthlyData.map(month => {
-                const monthAttendances = month.workingDays.map(day => {
-                    if (day.date) {
-                        const key = `${student.id}-${day.date}`;
-                        const attendance = attendanceMap.get(key);
-                        // Solo loggear para el primer estudiante para no saturar los logs
-                        if (student.id === students[0]?.student?.id) {
-                            console.log(`Student ${student.id}, Date ${day.date}, Key: ${key}, Attendance: ${attendance}`);
-                        }
-                        return attendance || null;
-                    }
-                    return null;
-                });
-
-                // Actualizar los contadores para los nuevos valores
-                const presentCount = monthAttendances.filter(att => att === 'P').length;
-                const absentCount = monthAttendances.filter(att => att === 'F').length;
-                const licenseCount = monthAttendances.filter(att => att === 'L').length;
-                const lateCount = monthAttendances.filter(att => att === 'T').length; // Por si hay tardanzas
-                const totalDaysWithData = monthAttendances.filter(att => att !== null).length;
-
-                return {
-                    month: month.month,
-                    year: month.year,
-                    attendances: monthAttendances,
-                    statistics: {
-                        present: presentCount,
-                        absent: absentCount,
-                        license: licenseCount,
-                        late: lateCount,
-                        totalDays: totalDaysWithData,
-                        percentage: totalDaysWithData > 0 ? ((presentCount) / totalDaysWithData * 100).toFixed(1) : '0' // Solo presente cuenta para el porcentaje
-                    }
-                };
-            });
-
-            const totalPresent = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.present, 0);
-            const totalAbsent = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.absent, 0);
-            const totalLicense = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.license, 0);
-            const totalLate = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.late, 0);
-            const totalDays = studentMonthlyAttendance.reduce((sum, month) => sum + month.statistics.totalDays, 0);
-
-            return {
-                student: {
-                    id: student.id,
-                    fullName: `${student.person?.lastname || ''} ${student.person?.second_lastname || ''} ${student.person?.name || ''}`.trim(),
-                    ci: student.person?.ci || 'Sin CI',
-                    rude: student.rude || 'Sin RUDE'
-                },
-                monthlyAttendance: studentMonthlyAttendance,
-                totalStatistics: {
-                    present: totalPresent,
-                    absent: totalAbsent,
-                    license: totalLicense,
-                    late: totalLate,
-                    totalDays: totalDays,
-                    percentage: totalDays > 0 ? ((totalPresent) / totalDays * 100).toFixed(1) : '0'
-                }
-            };
-        });
+        // Actualizar los contadores para los nuevos valores
+        const presentCount = monthAttendances.filter(
+          (att) => att === "P"
+        ).length;
+        const absentCount = monthAttendances.filter(
+          (att) => att === "A"
+        ).length;
+        const licenseCount = monthAttendances.filter(
+          (att) => att === "L"
+        ).length;
+        const lateCount = monthAttendances.filter((att) => att === "T").length;
+        const totalDaysWithData = monthAttendances.filter(
+          (att) => att !== null
+        ).length;
 
         return {
-            students: processedStudents,
-            monthlyData: monthlyData,
-            summary: {
-                totalStudents: students.length,
-                totalClasses: monthlyData.reduce((sum, month) => sum + month.workingDays.length, 0),
-                overallAttendanceRate: this.calculateOverallAttendanceRate(processedStudents)
-            }
+          month: month.month,
+          year: month.year,
+          attendances: monthAttendances,
+          statistics: {
+            present: presentCount,
+            absent: absentCount,
+            license: licenseCount,
+            late: lateCount,
+            totalDays: totalDaysWithData,
+            percentage:
+              totalDaysWithData > 0
+                ? ((presentCount / totalDaysWithData) * 100).toFixed(1)
+                : "0",
+          },
         };
+      });
+
+      const totalPresent = studentMonthlyAttendance.reduce(
+        (sum, month) => sum + month.statistics.present,
+        0
+      );
+      const totalAbsent = studentMonthlyAttendance.reduce(
+        (sum, month) => sum + month.statistics.absent,
+        0
+      );
+      const totalLicense = studentMonthlyAttendance.reduce(
+        (sum, month) => sum + month.statistics.license,
+        0
+      );
+      const totalLate = studentMonthlyAttendance.reduce(
+        (sum, month) => sum + month.statistics.late,
+        0
+      );
+      const totalDays = studentMonthlyAttendance.reduce(
+        (sum, month) => sum + month.statistics.totalDays,
+        0
+      );
+
+      return {
+        student: {
+          id: student.id,
+          fullName: `${student.person?.lastname || ""} ${
+            student.person?.second_lastname || ""
+          } ${student.person?.name || ""}`.trim(),
+          ci: student.person?.ci || "Sin CI",
+          rude: student.rude || "Sin RUDE",
+        },
+        monthlyAttendance: studentMonthlyAttendance,
+        totalStatistics: {
+          present: totalPresent,
+          absent: totalAbsent,
+          license: totalLicense,
+          late: totalLate,
+          totalDays: totalDays,
+          percentage:
+            totalDays > 0 ? ((totalPresent / totalDays) * 100).toFixed(1) : "0",
+        },
+      };
+    });
+
+    // Calcular estadísticas generales
+    const totalStudents = processedStudents.length;
+    const totalClasses = monthlyData.reduce(
+      (sum, month) => sum + month.workingDays.filter((day) => day.date).length,
+      0
+    );
+    const overallPresentCount = processedStudents.reduce(
+      (sum, student) => sum + student.totalStatistics.present,
+      0
+    );
+    const overallTotalDays = processedStudents.reduce(
+      (sum, student) => sum + student.totalStatistics.totalDays,
+      0
+    );
+    const overallAttendanceRate =
+      overallTotalDays > 0
+        ? ((overallPresentCount / overallTotalDays) * 100).toFixed(1)
+        : "0";
+
+    return {
+      students: processedStudents,
+      monthlyData: monthlyData,
+      summary: {
+        totalStudents,
+        totalClasses,
+        overallAttendanceRate,
+      },
+    };
+  }
+
+  private generateMonthlyStructure(startDate: Date, endDate: Date) {
+    const months = [];
+    const monthNames = [
+      "ENERO",
+      "FEBRERO",
+      "MARZO",
+      "ABRIL",
+      "MAYO",
+      "JUNIO",
+      "JULIO",
+      "AGOSTO",
+      "SEPTIEMBRE",
+      "OCTUBRE",
+      "NOVIEMBRE",
+      "DICIEMBRE",
+    ];
+
+    const dayLetters = ["L", "M", "X", "J", "V", "L", "M"]; // Lunes a Viernes principalmente
+
+    let currentMonth = startDate.getMonth();
+    let currentYear = startDate.getFullYear();
+    const endMonth = endDate.getMonth();
+    const endYear = endDate.getFullYear();
+
+    while (
+      currentYear < endYear ||
+      (currentYear === endYear && currentMonth <= endMonth)
+    ) {
+      const monthStart = new Date(currentYear, currentMonth, 1);
+      const monthEnd = new Date(currentYear, currentMonth + 1, 0);
+
+      const workingDays = [];
+
+      // Determinar el rango real de días para este mes
+      const actualStartDay =
+        currentYear === startDate.getFullYear() &&
+        currentMonth === startDate.getMonth()
+          ? startDate.getDate()
+          : 1;
+
+      const actualEndDay =
+        currentYear === endDate.getFullYear() &&
+        currentMonth === endDate.getMonth()
+          ? endDate.getDate()
+          : monthEnd.getDate();
+
+      for (let day = actualStartDay; day <= actualEndDay; day++) {
+        const currentDate = new Date(currentYear, currentMonth, day);
+        const dayOfWeek = currentDate.getDay();
+
+        // Solo días laborables (Lunes=1 a Viernes=5)
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          const dateStr = currentDate.toISOString().split("T")[0];
+          workingDays.push({
+            day: day,
+            date: dateStr,
+            dayLetter: dayLetters[dayOfWeek - 1] || "L",
+          });
+        }
+      }
+
+      // Solo agregar el mes si tiene días laborables en el rango
+      if (workingDays.length > 0) {
+        months.push({
+          month: monthNames[currentMonth],
+          year: currentYear,
+          workingDays: workingDays,
+        });
+      }
+
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
     }
 
-    private generateMonthlyStructure(startDate: Date, endDate: Date) {
-        const months = [];
-        const monthNames = [
-            'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
-            'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
-        ];
-        
-        let currentDate: Date;
-        let finalDate: Date;
+    return months;
+  }
 
-        // Determinar el rango de fechas
-        const dates = [startDate, endDate].filter(Boolean);
-        
-        if (dates.length === 0) {
-            // Si no hay fechas de asistencia, usar febrero a diciembre del año actual
-            currentDate = new Date(new Date().getFullYear(), 1, 1); // Febrero (mes 1)
-            finalDate = new Date(new Date().getFullYear(), 11, 31); // Diciembre (mes 11)
-        } else if (dates.length === 1) {
-            // Si solo hay una fecha, usar febrero a diciembre del año de esa fecha
-            const year = dates[0].getFullYear();
-            currentDate = new Date(year, 1, 1); // Febrero
-            finalDate = new Date(year, 11, 31); // Diciembre
+  private async createAttendanceExcel(
+    data: any,
+    course: any,
+    subject: any,
+    professor: any,
+    management: any,
+    startDate?: string,
+    endDate?: string
+  ) {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Reporte de Asistencia");
+
+    // Configurar el estilo general
+    worksheet.views = [
+      {
+        showGridLines: true,
+        zoomScale: 90,
+      },
+    ];
+
+    // Agregar encabezado principal mejorado
+    this.addMainHeader(
+      worksheet,
+      course,
+      subject,
+      professor,
+      management,
+      startDate,
+      endDate
+    );
+
+    // Configurar encabezados de columnas y días
+    this.createMonthlyHeaders(worksheet, data.monthlyData);
+    this.createDayNumbers(worksheet, data.monthlyData);
+
+    // Agregar datos de estudiantes
+    data.students.forEach((studentData: any, index: number) => {
+      const rowData = [studentData.student.fullName];
+
+      // Agregar asistencias de cada mes
+      studentData.monthlyAttendance.forEach((monthData: any) => {
+        monthData.attendances.forEach((attendance: any) => {
+          rowData.push(this.getAttendanceSymbol(attendance));
+        });
+      });
+
+      const row = worksheet.addRow(rowData);
+      this.styleStudentRow(row, index);
+    });
+
+    // Agregar leyenda mejorada
+    this.addLegend(worksheet);
+
+    // Ajustar anchos de columna
+    this.adjustColumnWidths(worksheet, data.monthlyData);
+
+    return await workbook.xlsx.writeBuffer();
+  }
+
+  private createMonthlyHeaders(worksheet: any, monthlyData: any[]) {
+    const headerRow = worksheet.getRow(7);
+    let colIndex = 2;
+
+    monthlyData.forEach((monthData: any) => {
+      const startCol = colIndex;
+      const endCol = colIndex + monthData.workingDays.length - 1;
+
+      // Merge cells para el nombre del mes
+      if (monthData.workingDays.length > 0) {
+        worksheet.mergeCells(7, startCol, 7, endCol);
+        const monthCell = headerRow.getCell(startCol);
+        monthCell.value = monthData.month;
+        monthCell.alignment = { horizontal: "center", vertical: "middle" };
+        monthCell.font = { bold: true, size: 12, color: { argb: "FFFFFFFF" } };
+        monthCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FF4472C4" },
+        };
+        monthCell.border = {
+          top: { style: "thick" },
+          left: { style: "thick" },
+          bottom: { style: "thick" },
+          right: { style: "thick" },
+        };
+      }
+
+      colIndex += monthData.workingDays.length;
+    });
+
+    // Encabezado de estudiantes
+    const studentHeader = headerRow.getCell(1);
+    studentHeader.value = "APELLIDOS Y NOMBRE(S)";
+    studentHeader.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+      wrapText: true,
+    };
+    studentHeader.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+    studentHeader.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF4472C4" },
+    };
+    studentHeader.border = {
+      top: { style: "thick" },
+      left: { style: "thick" },
+      bottom: { style: "thick" },
+      right: { style: "thick" },
+    };
+
+    headerRow.height = 30;
+  }
+
+  private createDayNumbers(worksheet: any, monthlyData: any[]) {
+    const dayRow = worksheet.getRow(8);
+    const dayLabelRow = worksheet.getRow(9);
+    let colIndex = 2;
+
+    monthlyData.forEach((monthData: any) => {
+      monthData.workingDays.forEach((day: any) => {
+        // Número del día
+        const dayCell = dayRow.getCell(colIndex);
+        dayCell.value = day.day || "";
+        dayCell.alignment = { horizontal: "center", vertical: "middle" };
+        dayCell.font = { size: 9, bold: true };
+        dayCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF2F2F2" },
+        };
+        dayCell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+
+        // Letra del día (L, M, X, J, V)
+        const dayLabelCell = dayLabelRow.getCell(colIndex);
+        dayLabelCell.value = day.dayLetter || "L";
+        dayLabelCell.alignment = { horizontal: "center", vertical: "middle" };
+        dayLabelCell.font = { bold: true, size: 8 };
+        dayLabelCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE2EFDA" },
+        };
+        dayLabelCell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+
+        colIndex++;
+      });
+    });
+
+    // Configurar altura de filas
+    dayRow.height = 20;
+    dayLabelRow.height = 20;
+  }
+
+  private styleStudentRow(row: any, index: number) {
+    row.height = 25;
+    row.eachCell((cell: any, colNumber: number) => {
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+
+      if (colNumber === 1) {
+        // Nombre del estudiante
+        cell.alignment = { horizontal: "left", vertical: "middle" };
+        cell.font = { size: 10 };
+
+        // Alternar colores de fila para mejor legibilidad
+        if (index % 2 === 0) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF9F9F9" },
+          };
+        }
+      } else {
+        // Días de asistencia
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.font = { bold: true, size: 10 };
+
+        // Colorear según el tipo de asistencia
+        const value = cell.value;
+        if (value === "P") {
+          cell.font = { ...cell.font, color: { argb: "FF008000" } }; // Verde para presente
+        } else if (value === "A") {
+          cell.font = { ...cell.font, color: { argb: "FFFF0000" } }; // Rojo para ausente
+        } else if (value === "L") {
+          cell.font = { ...cell.font, color: { argb: "FFFF8C00" } }; // Naranja para licencia
+        } else if (value === "T") {
+          cell.font = { ...cell.font, color: { argb: "FFFF6600" } }; // Naranja oscuro para tardanza
         } else {
-            // Si hay rango de fechas específico, usar ese rango
-            currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-            finalDate = new Date(endDate.getFullYear(), endDate.getMonth(), 31);
+          cell.font = { ...cell.font, color: { argb: "FF999999" } }; // Gris para sin registro
         }
 
-        // Generar meses en el rango
-        while (currentDate <= finalDate) {
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-            
-            // Generar días hábiles del mes (L, M, X, J, V)
-            const workingDays = this.getWorkingDaysOfMonth(year, month);
-            
-            months.push({
-                month: monthNames[month],
-                year: year,
-                monthNumber: month + 1,
-                workingDays: workingDays
+        // Alternar colores de fila
+        if (index % 2 === 0) {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF9F9F9" },
+          };
+        }
+      }
+    });
+  }
+
+  private addMainHeader(
+    worksheet: any,
+    course: any,
+    subject: any,
+    professor: any,
+    management: any,
+    startDate?: string,
+    endDate?: string
+  ) {
+    // Insertar filas para el encabezado
+    worksheet.insertRow(1, []);
+    worksheet.insertRow(2, []);
+    worksheet.insertRow(3, []);
+    worksheet.insertRow(4, []);
+    worksheet.insertRow(5, []);
+    worksheet.insertRow(6, []);
+
+    // Título principal
+    worksheet.getCell("A1").value = "REPORTE DE ASISTENCIA";
+    worksheet.getCell("A1").font = {
+      bold: true,
+      size: 18,
+      color: { argb: "FF4472C4" },
+    };
+    worksheet.getCell("A1").alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+
+    // Información del reporte con mejor estilo
+    const infoStyle = { bold: true, size: 11, color: { argb: "FF333333" } };
+
+    worksheet.getCell("A2").value = `Curso: ${
+      course?.course || "N/A"
+    } - Paralelo: ${course?.parallel?.trim() || "N/A"}`;
+    worksheet.getCell("A2").font = infoStyle;
+
+    worksheet.getCell("A3").value = `Materia: ${subject?.subject || "N/A"}`;
+    worksheet.getCell("A3").font = infoStyle;
+
+    worksheet.getCell("A4").value = `Profesor: ${
+      professor?.person?.name || ""
+    } ${professor?.person?.lastname || ""} ${
+      professor?.person?.second_lastname || ""
+    }`.trim();
+    worksheet.getCell("A4").font = infoStyle;
+
+    worksheet.getCell("A5").value = `Gestión: ${
+      management?.management || "N/A"
+    }`;
+    worksheet.getCell("A5").font = infoStyle;
+
+    const period =
+      startDate && endDate
+        ? `${this.formatDate(startDate)} - ${this.formatDate(endDate)}`
+        : "Gestión completa";
+    worksheet.getCell("A6").value = `Período: ${period}`;
+    worksheet.getCell("A6").font = infoStyle;
+
+    // Agregar una línea separadora
+    worksheet.addRow([]);
+  }
+
+  private addLegend(worksheet: any) {
+    const lastRow = worksheet.rowCount;
+
+    worksheet.addRow([]);
+    worksheet.addRow(["LEYENDA:"]);
+    worksheet.addRow(["P = Presente"]);
+    worksheet.addRow(["A = Ausente"]);
+    worksheet.addRow(["L = Licencia/Justificado"]);
+    worksheet.addRow(["T = Tardanza"]);
+    worksheet.addRow(["- = Sin registro"]);
+
+    // Estilo para la leyenda
+    const legendStartRow = lastRow + 2;
+    for (let i = legendStartRow; i <= lastRow + 7; i++) {
+      const cell = worksheet.getCell(`A${i}`);
+
+      if (i === legendStartRow) {
+        // Título de la leyenda
+        cell.font = { bold: true, size: 12, color: { argb: "FF4472C4" } };
+      } else {
+        // Items de la leyenda
+        cell.font = { size: 10 };
+        // Agregar color según el tipo
+        if (cell.value && typeof cell.value === "string") {
+          if (cell.value.startsWith("P =")) {
+            cell.font = { ...cell.font, color: { argb: "FF008000" } }; // Verde para presente
+          } else if (cell.value.startsWith("A =")) {
+            cell.font = { ...cell.font, color: { argb: "FFFF0000" } }; // Rojo para ausente
+          } else if (cell.value.startsWith("L =")) {
+            cell.font = { ...cell.font, color: { argb: "FFFF8C00" } }; // Naranja para licencia
+          } else if (cell.value.startsWith("T =")) {
+            cell.font = { ...cell.font, color: { argb: "FFFF6600" } }; // Naranja oscuro para tardanza
+          } else if (cell.value.startsWith("- =")) {
+            cell.font = { ...cell.font, color: { argb: "FF999999" } }; // Gris para sin registro
+          }
+        }
+      }
+    }
+  }
+
+  private adjustColumnWidths(worksheet: any, monthlyData: any[]) {
+    // Columna de nombres más ancha
+    worksheet.getColumn(1).width = 35;
+
+    // Columnas de días más pequeñas
+    let colIndex = 2;
+    monthlyData.forEach((monthData: any) => {
+      monthData.workingDays.forEach(() => {
+        worksheet.getColumn(colIndex).width = 4;
+        colIndex++;
+      });
+    });
+  }
+
+  private getAttendanceSymbol(status: string | null): string {
+    if (!status) return "-";
+
+    const cleanStatus = status.trim().toUpperCase();
+    switch (cleanStatus) {
+      case "P":
+        return "P"; // Presente
+      case "A":
+        return "A"; // Ausente
+      case "L":
+        return "L"; // Licencia
+      case "T":
+        return "T"; // Tardanza
+      default:
+        return "-";
+    }
+  }
+
+  private formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("es-ES");
+  }
+
+  private generateFileName(
+    course: any,
+    subject: any,
+    professor: any,
+    management: any
+  ): string {
+    const courseName = course?.course?.replace(/\s+/g, "_") || "curso";
+    const subjectName = subject?.subject?.replace(/\s+/g, "_") || "materia";
+    const dateStr = new Date().toISOString().split("T")[0];
+
+    return `reporte_asistencia_${courseName}_${subjectName}_${dateStr}.xlsx`;
+  }
+
+  async generateCentralizadorAnual(courseId: number, managementId: number) {
+    try {
+      // 1. Obtener información básica
+      const [course, management] = await Promise.all([
+        this.getCourseInfo(courseId),
+        this.getManagementInfo(managementId),
+      ]);
+
+      // 2. Obtener estudiantes del curso
+      const students = await this.getStudentsByCourse(courseId);
+
+      // 3. Obtener todas las materias del curso usando Assignment
+      const assignments = await this.db.assignment.findMany({
+        where: {
+          course_id: courseId,
+          management_id: managementId,
+        },
+        include: {
+          subject: true,
+          professor: {
+            include: {
+              person: true,
+            },
+          },
+        },
+        distinct: ["subject_id"], // Para evitar duplicados por profesor
+      });
+
+      // 4. Obtener todas las dimensiones para calcular los porcentajes
+      const dimensions = await this.db.dimension.findMany();
+
+      // 5. Para cada estudiante y materia, calcular las notas por trimestre
+      const studentGrades = await this.calculateStudentGrades(
+        students,
+        assignments,
+        managementId,
+        dimensions
+      );
+
+      // 6. Generar el archivo Excel
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Centralizador Anual");
+
+      // 7. Configurar el Excel
+      await this.setupCentralizadorExcel(
+        worksheet,
+        students,
+        assignments,
+        studentGrades,
+        course,
+        management
+      );
+
+      // 8. Generar buffer y subir a Firebase
+      const buffer = await workbook.xlsx.writeBuffer();
+      const fileName = this.generateCentralizadorFileName(course, management);
+      const downloadURL = await this.uploadCentralizadorToFirebase(
+        buffer,
+        fileName
+      );
+
+      return {
+        success: true,
+        downloadURL,
+        fileName,
+        message: "Reporte centralizador anual generado exitosamente",
+        data: {
+          course: course,
+          management: management,
+          students: studentGrades, // Incluir los datos detallados en la respuesta
+          subjects: assignments.map((a) => a.subject),
+        },
+      };
+    } catch (error) {
+      console.error("Error generating centralizador anual:", error);
+      throw new Error("Error al generar el reporte centralizador anual");
+    }
+  }
+
+  private async calculateStudentGrades(
+    students: any[],
+    assignments: any[],
+    managementId: number,
+    dimensions: any[]
+  ) {
+    const studentGrades = [];
+
+    for (const registration of students) {
+      const studentData = {
+        student: registration.student, // Extraer el estudiante del registro
+        subjects: [],
+        finalAverage: 0,
+        status: "REPROBADO",
+      };
+
+      for (const assignment of assignments) {
+        const subjectGrades = {
+          subject: assignment.subject,
+          professor: assignment.professor,
+          trimesters: {
+            Q1: {
+              saber: 0,
+              hacer: 0,
+              ser: 0,
+              decidir: 0,
+              autoevaluacion: 0,
+              total: 0,
+            },
+            Q2: {
+              saber: 0,
+              hacer: 0,
+              ser: 0,
+              decidir: 0,
+              autoevaluacion: 0,
+              total: 0,
+            },
+            Q3: {
+              saber: 0,
+              hacer: 0,
+              ser: 0,
+              decidir: 0,
+              autoevaluacion: 0,
+              total: 0,
+            },
+          },
+          finalAverage: 0,
+        };
+
+        // Calcular notas por trimestre
+        for (const trimester of ["Q1", "Q2", "Q3"]) {
+          const trimesterGrades = await this.calculateTrimesterGrades(
+            registration.student.id, // Usar el ID del estudiante del registro
+            assignment.subject_id,
+            managementId,
+            trimester,
+            dimensions
+          );
+          subjectGrades.trimesters[trimester] = trimesterGrades;
+        }
+
+        // Calcular promedio final de la materia
+        const totalTrimesters = Object.values(subjectGrades.trimesters);
+        subjectGrades.finalAverage =
+          totalTrimesters.reduce((sum, t: any) => sum + t.total, 0) /
+          totalTrimesters.length;
+
+        studentData.subjects.push(subjectGrades);
+      }
+
+      // Calcular promedio final del estudiante
+      if (studentData.subjects.length > 0) {
+        studentData.finalAverage =
+          studentData.subjects.reduce(
+            (sum, subject: any) => sum + subject.finalAverage,
+            0
+          ) / studentData.subjects.length;
+        studentData.status =
+          studentData.finalAverage >= 51 ? "APROBADO" : "REPROBADO";
+      }
+
+      studentGrades.push(studentData);
+    }
+
+    return studentGrades;
+  }
+
+  private async calculateTrimesterGrades(
+    studentId: number,
+    subjectId: number,
+    managementId: number,
+    quarter: string,
+    dimensions: any[]
+  ) {
+    console.log(
+      `Calculando trimestre ${quarter} para estudiante ${studentId}, materia ${subjectId}`
+    );
+
+    const grades = {
+      saber: 0,
+      hacer: 0,
+      ser: 0,
+      decidir: 0,
+      autoevaluacion: 0,
+      total: 0,
+      details: {
+        saber: { tasks: [], average: 0, count: 0 },
+        hacer: { tasks: [], average: 0, count: 0 },
+        ser: { tasks: [], average: 0, count: 0 },
+        decidir: { tasks: [], average: 0, count: 0 },
+        autoevaluacion: { tasks: [], average: 0, count: 0 },
+      },
+    };
+
+    // Obtener todas las tareas del trimestre
+    const tasks = await this.db.task.findMany({
+      where: {
+        subject_id: subjectId,
+        management_id: managementId,
+        quarter: quarter,
+        status: 1, // Tareas activas
+      },
+      include: {
+        assignments: {
+          where: {
+            student_id: studentId,
+          },
+        },
+        dimension: true,
+      },
+    });
+
+    console.log(
+      `Encontradas ${tasks.length} tareas para el trimestre ${quarter}`
+    );
+
+    // Agrupar tareas por dimensión
+    const tasksByDimension = {
+      saber: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("saber")
+      ),
+      hacer: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("hacer")
+      ),
+      ser: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("ser")
+      ),
+      decidir: tasks.filter((t) =>
+        t.dimension.dimension?.toLowerCase().includes("decidir")
+      ),
+    };
+
+    // Separar autoevaluaciones
+    const autoevaluaciones = tasks.filter((t) => t.is_autoevaluation === 1);
+
+    // Calcular promedio por dimensión
+    for (const [dimensionName, dimensionTasks] of Object.entries(
+      tasksByDimension
+    )) {
+      if (dimensionTasks.length > 0) {
+        const taskGrades = [];
+        const totalScore = dimensionTasks.reduce((sum, task) => {
+          const assignment = task.assignments[0];
+          if (assignment && assignment.qualification) {
+            const score = parseFloat(assignment.qualification);
+            taskGrades.push({
+              taskName: task.name,
+              score: score,
             });
+            return sum + score;
+          }
+          return sum;
+        }, 0);
 
-            // Avanzar al siguiente mes
-            currentDate.setMonth(currentDate.getMonth() + 1);
-            currentDate.setDate(1);
+        const averageScore = totalScore / dimensionTasks.length;
+        grades.details[dimensionName].tasks = taskGrades;
+        grades.details[dimensionName].average = averageScore;
+        grades.details[dimensionName].count = dimensionTasks.length;
+
+        // Aplicar porcentajes según la distribución
+        switch (dimensionName) {
+          case "saber":
+            grades.saber = (averageScore * 45) / 100;
+            break;
+          case "hacer":
+            grades.hacer = (averageScore * 40) / 100;
+            break;
+          case "ser":
+            grades.ser = (averageScore * 5) / 100;
+            break;
+          case "decidir":
+            grades.decidir = (averageScore * 5) / 100;
+            break;
         }
-
-        return months;
+      }
     }
 
-    private getWorkingDaysOfMonth(year: number, month: number) {
-        const workingDays = [];
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        
-        // Obtener todos los días hábiles del mes en orden cronológico
-        for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(year, month, day);
-            const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
-            
-            // Solo días hábiles (Lunes a Viernes)
-            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                workingDays.push({
-                    day: day,
-                    date: date.toISOString().split('T')[0],
-                    dayOfWeek: dayOfWeek,
-                    dayLetter: ['L', 'M', 'X', 'J', 'V'][dayOfWeek - 1]
-                });
-            }
+    // Calcular autoevaluación
+    if (autoevaluaciones.length > 0) {
+      const taskGrades = [];
+      const totalAutoeval = autoevaluaciones.reduce((sum, task) => {
+        const assignment = task.assignments[0];
+        if (assignment && assignment.qualification) {
+          const score = parseFloat(assignment.qualification);
+          taskGrades.push({
+            taskName: task.name,
+            score: score,
+          });
+          return sum + score;
         }
+        return sum;
+      }, 0);
 
-        return workingDays;
+      const averageAutoeval = totalAutoeval / autoevaluaciones.length;
+      grades.details.autoevaluacion.tasks = taskGrades;
+      grades.details.autoevaluacion.average = averageAutoeval;
+      grades.details.autoevaluacion.count = autoevaluaciones.length;
+      grades.autoevaluacion = (averageAutoeval * 5) / 100;
     }
 
-    private calculateOverallAttendanceRate(students: any[]): string {
-        if (students.length === 0) return '0';
-        
-        const totalPercentage = students.reduce((sum, student) => 
-            sum + parseFloat(student.totalStatistics.percentage), 0
+    // Calcular total
+    grades.total =
+      grades.saber +
+      grades.hacer +
+      grades.ser +
+      grades.decidir +
+      grades.autoevaluacion;
+
+    console.log(`Trimestre ${quarter} calculado:`, grades);
+    return grades;
+  }
+
+  private async setupCentralizadorExcel(
+    worksheet: ExcelJS.Worksheet,
+    students: any[],
+    assignments: any[],
+    studentGrades: any[],
+    course: any,
+    management: any
+  ) {
+    // Calcular número total de columnas
+    const totalColumns = 2 + assignments.length * 4 + 2; // N°, NOMBRE, (4 cols x materia), PROMEDIO, SITUACION
+
+    // Configurar título
+    worksheet.mergeCells(`A1:${String.fromCharCode(64 + totalColumns)}1`);
+    const titleCell = worksheet.getCell("A1");
+    titleCell.value = `CENTRALIZADOR ANUAL - ${course.course} - GESTIÓN ${management.management}`;
+    titleCell.font = { bold: true, size: 16 };
+    titleCell.alignment = { horizontal: "center" };
+
+    // Fila 2: N° y APELLIDOS Y NOMBRES (que abarcan 2 filas)
+    worksheet.mergeCells("A2:A3");
+    const numCell = worksheet.getCell("A2");
+    numCell.value = "N°";
+    numCell.font = { bold: true };
+    numCell.alignment = { horizontal: "center", vertical: "middle" };
+    numCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    worksheet.mergeCells("B2:B3");
+    const nameCell = worksheet.getCell("B2");
+    nameCell.value = "APELLIDOS Y NOMBRES";
+    nameCell.font = { bold: true };
+    nameCell.alignment = { horizontal: "center", vertical: "middle" };
+    nameCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    // Configurar encabezados de materias
+    let currentCol = 3;
+    assignments.forEach((assignment) => {
+      // Fila 2: Nombre de la materia (abarca 4 columnas)
+      const startCol = String.fromCharCode(64 + currentCol);
+      const endCol = String.fromCharCode(64 + currentCol + 3);
+      worksheet.mergeCells(`${startCol}2:${endCol}2`);
+
+      const subjectCell = worksheet.getCell(`${startCol}2`);
+      subjectCell.value = assignment.subject.subject;
+      subjectCell.font = { bold: true };
+      subjectCell.alignment = { horizontal: "center" };
+      subjectCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE0E0E0" },
+      };
+
+      // Fila 3: Subencabezados (1T, 2T, 3T, PR)
+      const subHeaders = ["1T", "2T", "3T", "PR"];
+      subHeaders.forEach((header, subIndex) => {
+        const col = String.fromCharCode(64 + currentCol + subIndex);
+        const cell = worksheet.getCell(`${col}3`);
+        cell.value = header;
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: "center" };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE0E0E0" },
+        };
+      });
+
+      currentCol += 4;
+    });
+
+    // PROMEDIO FINAL y SITUACIÓN (abarcan 2 filas)
+    const promedioCol = String.fromCharCode(64 + currentCol);
+    const situacionCol = String.fromCharCode(64 + currentCol + 1);
+
+    worksheet.mergeCells(`${promedioCol}2:${promedioCol}3`);
+    const promedioCell = worksheet.getCell(`${promedioCol}2`);
+    promedioCell.value = "PROMEDIO FINAL";
+    promedioCell.font = { bold: true };
+    promedioCell.alignment = { horizontal: "center", vertical: "middle" };
+    promedioCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    worksheet.mergeCells(`${situacionCol}2:${situacionCol}3`);
+    const situacionCell = worksheet.getCell(`${situacionCol}2`);
+    situacionCell.value = "SITUACIÓN";
+    situacionCell.font = { bold: true };
+    situacionCell.alignment = { horizontal: "center", vertical: "middle" };
+    situacionCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    // Aplicar bordes a los encabezados
+    for (let row = 2; row <= 3; row++) {
+      for (let col = 1; col <= totalColumns; col++) {
+        const cell = worksheet.getCell(row, col);
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+      }
+    }
+
+    // Llenar datos de estudiantes (empezando desde la fila 4)
+    studentGrades.forEach((studentData, index) => {
+      const row = worksheet.getRow(index + 4);
+      let colIndex = 1;
+
+      // Número y nombre
+      row.getCell(colIndex++).value = index + 1;
+      row.getCell(
+        colIndex++
+      ).value = `${studentData.student.person.lastname} ${studentData.student.person.name}`;
+
+      // Notas por materia
+      studentData.subjects.forEach((subjectGrade: any) => {
+        row.getCell(colIndex++).value = Math.round(
+          subjectGrade.trimesters.Q1.total
         );
-        
-        return (totalPercentage / students.length).toFixed(1);
+        row.getCell(colIndex++).value = Math.round(
+          subjectGrade.trimesters.Q2.total
+        );
+        row.getCell(colIndex++).value = Math.round(
+          subjectGrade.trimesters.Q3.total
+        );
+        row.getCell(colIndex++).value = Math.round(subjectGrade.finalAverage);
+      });
+
+      // Promedio final y situación
+      row.getCell(colIndex++).value = Math.round(studentData.finalAverage);
+      const statusCell = row.getCell(colIndex++);
+      statusCell.value = studentData.status;
+      statusCell.font = {
+        bold: true,
+        color: {
+          argb: studentData.status === "APROBADO" ? "FF008000" : "FFFF0000",
+        },
+      };
+
+      // Aplicar bordes a toda la fila
+      for (let i = 1; i <= totalColumns; i++) {
+        const cell = row.getCell(i);
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
+        cell.alignment = { horizontal: "center" };
+      }
+    });
+
+    // Ajustar ancho de columnas
+    worksheet.getColumn(1).width = 5; // N°
+    worksheet.getColumn(2).width = 25; // APELLIDOS Y NOMBRES
+
+    // Columnas de materias
+    for (let i = 3; i <= 2 + assignments.length * 4; i++) {
+      worksheet.getColumn(i).width = 8;
     }
 
-    private async createAttendanceExcel(data: any, course: any, subject: any, professor: any, management: any, startDate?: string, endDate?: string) {
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Reporte de Asistencia');
+    // Columnas finales
+    worksheet.getColumn(totalColumns - 1).width = 15; // PROMEDIO FINAL
+    worksheet.getColumn(totalColumns).width = 12; // SITUACIÓN
+  }
 
-        // Estilo del encabezado principal
-        this.addMainHeader(worksheet, course, subject, professor, management, startDate, endDate);
+  private generateCentralizadorFileName(course: any, management: any): string {
+    const courseName = course?.course?.replace(/\s+/g, "_") || "curso";
+    const managementYear = management?.management || "gestion";
+    const dateStr = new Date().toISOString().split("T")[0];
 
-        // Crear estructura de columnas dinámicamente
-        const columns = [
-            { header: 'APELLIDOS Y NOMBRE(S)', key: 'fullName', width: 35 }
-        ];
+    return `centralizador_anual_${courseName}_${managementYear}_${dateStr}.xlsx`;
+  }
 
-        // Contador para las claves de columnas
-        let columnIndex = 0;
+  private async uploadCentralizadorToFirebase(
+    buffer: ArrayBuffer,
+    fileName: string
+  ): Promise<string> {
+    try {
+      const storageRef = ref(this.storage, `reports/centralizador/${fileName}`);
+      const snapshot = await uploadBytes(storageRef, new Uint8Array(buffer));
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("Error uploading centralizador to Firebase:", error);
+      throw new Error("Error al subir el reporte centralizador a Firebase");
+    }
+  }
 
-        // Agregar columnas para cada mes y sus días
-        data.monthlyData.forEach((monthData: any) => {
-            monthData.workingDays.forEach((day: any) => {
-                columns.push({
-                    header: day.dayLetter || 'L', // L, M, X, J, V
-                    key: `day_${columnIndex}`,
-                    width: 4
-                });
-                columnIndex++;
-            });
+  private async uploadToFirebase(
+    buffer: Uint8Array,
+    fileName: string
+  ): Promise<string> {
+    try {
+      const storageRef = ref(this.storage, `reports/attendance/${fileName}`);
+      const snapshot = await uploadBytes(storageRef, buffer);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("Error uploading to Firebase:", error);
+      throw new Error("Error al subir el archivo a Firebase");
+    }
+  }
+
+  // ================= BOLETINES =================
+
+  async generateBoletin(
+    courseId: number,
+    managementId: number,
+    studentId?: number,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    try {
+      console.log("🎯 Generando boletín:", {
+        courseId,
+        managementId,
+        studentId,
+        trimester,
+      });
+
+      // Obtener información del curso y gestión
+      const course = await this.db.course.findUnique({
+        where: { id: courseId },
+      });
+
+      const management = await this.db.management.findUnique({
+        where: { id: managementId },
+      });
+
+      if (!course || !management) {
+        throw new Error("Curso o gestión no encontrados");
+      }
+
+      // Obtener estudiantes (uno específico o todos) a través de Registration
+      const whereClause: any = {
+        registrations: {
+          some: {
+            course_id: courseId,
+            management_id: managementId,
+          },
+        },
+      };
+
+      if (studentId) {
+        whereClause.id = studentId;
+      }
+
+      const students = await this.db.student.findMany({
+        where: whereClause,
+        include: {
+          person: true,
+        },
+        orderBy: {
+          person: {
+            lastname: "asc",
+          },
+        },
+      });
+
+      if (students.length === 0) {
+        throw new Error("No se encontraron estudiantes");
+      }
+
+      // Obtener materias del curso a través de Assignment
+      const assignments = await this.db.assignment.findMany({
+        where: {
+          course_id: courseId,
+          management_id: managementId,
+        },
+        include: {
+          subject: true,
+          professor: {
+            include: {
+              person: true,
+            },
+          },
+        },
+        orderBy: {
+          subject: {
+            subject: "asc",
+          },
+        },
+      });
+
+      if (assignments.length === 0) {
+        throw new Error("No se encontraron materias asignadas al curso");
+      }
+
+      // Generar PDF único con todos los boletines
+      console.log(`📝 Generando boletines para ${students.length} estudiantes`);
+
+      // Calcular notas para todos los estudiantes
+      const allStudentGrades = [];
+      for (const student of students) {
+        const studentGrades = await this.calculateStudentGradesForBoletin(
+          student.id,
+          assignments,
+          trimester
+        );
+        allStudentGrades.push({
+          student,
+          grades: studentGrades,
         });
+      }
 
-        worksheet.columns = columns;
+      // Generar PDF único con todos los boletines
+      const pdfBuffer = await this.generateAllBoletinesPDF(
+        allStudentGrades,
+        assignments,
+        course,
+        management,
+        trimester
+      );
 
-        // Crear fila de encabezado de meses
-        this.createMonthHeaders(worksheet, data.monthlyData);
+      // Subir a Firebase
+      const fileName = `boletines_curso_${course.course}_${
+        trimester || "ANUAL"
+      }_${management.management}_${Date.now()}.pdf`;
+      const downloadUrl = await this.uploadBoletinToFirebase(
+        pdfBuffer,
+        fileName
+      );
 
-        // Crear fila de números de días
-        this.createDayNumbers(worksheet, data.monthlyData);
+      return {
+        ok: true,
+        boletines: [
+          {
+            courseId: course.id,
+            courseName: course.course,
+            downloadUrl,
+            fileName,
+            totalStudents: students.length,
+          },
+        ],
+        totalStudents: students.length,
+        reportInfo: {
+          course: course.course,
+          management: management.management,
+          trimester: trimester || "ANUAL",
+          generatedAt: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      console.error("❌ Error generando boletín:", error);
+      throw error;
+    }
+  }
 
-        // Agregar datos de estudiantes
-        let currentRow = 10; // Después de los encabezados
-        data.students.forEach((studentData: any, index: number) => {
-            const rowData: any = {
-                fullName: studentData.student.fullName
-            };
+  private async calculateStudentGradesForBoletin(
+    studentId: number,
+    assignments: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const studentGrades = [];
 
-            // Llenar datos de asistencia
-            let dayColumnIndex = 0;
-            data.monthlyData.forEach((monthData: any, monthIdx: number) => {
-                const studentMonth = studentData.monthlyAttendance[monthIdx];
-                
-                monthData.workingDays.forEach((day: any, dayIdx: number) => {
-                    const key = `day_${dayColumnIndex}`;
-                    
-                    if (studentMonth && studentMonth.attendances[dayIdx] !== undefined) {
-                        const attendance = studentMonth.attendances[dayIdx];
-                        rowData[key] = this.getAttendanceSymbol(attendance);
-                    } else {
-                        rowData[key] = '-';
-                    }
-                    
-                    dayColumnIndex++;
-                });
-            });
+    // Obtener dimensiones para el cálculo de notas
+    const dimensions = await this.db.dimension.findMany();
 
-            const row = worksheet.addRow(rowData);
-            this.styleDataRowMonthly(row);
-            currentRow++;
-        });
+    for (const assignment of assignments) {
+      console.log(
+        `📚 Calculando notas para materia: ${assignment.subject.subject}`
+      );
 
-        return await workbook.xlsx.writeBuffer();
+      const subjectGrades = {
+        assignment,
+        trimesters: {
+          Q1: {
+            saber: 0,
+            hacer: 0,
+            ser: 0,
+            decidir: 0,
+            autoevaluacion: 0,
+            total: 0,
+          },
+          Q2: {
+            saber: 0,
+            hacer: 0,
+            ser: 0,
+            decidir: 0,
+            autoevaluacion: 0,
+            total: 0,
+          },
+          Q3: {
+            saber: 0,
+            hacer: 0,
+            ser: 0,
+            decidir: 0,
+            autoevaluacion: 0,
+            total: 0,
+          },
+        },
+        finalAverage: 0,
+      };
+
+      // Calcular notas por trimestre usando la misma lógica del centralizador
+      for (const quarter of ["Q1", "Q2", "Q3"]) {
+        const trimesterGrades = await this.calculateTrimesterGrades(
+          studentId,
+          assignment.subject_id,
+          assignment.management_id,
+          quarter,
+          dimensions
+        );
+        subjectGrades.trimesters[quarter] = trimesterGrades;
+      }
+
+      // Calcular promedio final de la materia
+      const totalTrimesters = Object.values(subjectGrades.trimesters);
+      subjectGrades.finalAverage =
+        totalTrimesters.reduce((sum, t: any) => sum + t.total, 0) /
+        totalTrimesters.length;
+
+      console.log(
+        `📊 Promedio final de ${assignment.subject.subject}: ${subjectGrades.finalAverage}`
+      );
+
+      studentGrades.push(subjectGrades);
     }
 
-    private createMonthHeaders(worksheet: any, monthlyData: any[]) {
-        const headerRow = worksheet.getRow(7);
-        let colIndex = 2; // Empezar después de la columna de nombres
+    return studentGrades;
+  }
 
-        monthlyData.forEach((monthData: any) => {
-            const monthDays = monthData.workingDays.length;
+  private async generateAllBoletinesPDF(
+    allStudentGrades: any[],
+    assignments: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ): Promise<Buffer> {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
 
-            if (monthDays > 0) {
-                // Combinar celdas para el nombre del mes
-                const startCol = colIndex;
-                const endCol = colIndex + monthDays - 1;
-                
-                if (startCol <= endCol) {
-                    worksheet.mergeCells(headerRow.number, startCol, headerRow.number, endCol);
-                    const cell = worksheet.getCell(headerRow.number, startCol);
-                    cell.value = monthData.month;
-                    cell.fill = {
-                        type: 'pattern',
-                        pattern: 'solid',
-                        fgColor: { argb: 'FF4472C4' }
-                    };
-                    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
-                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    cell.border = {
-                        top: { style: 'thin' },
-                        left: { style: 'thin' },
-                        bottom: { style: 'thin' },
-                        right: { style: 'thin' }
-                    };
-                }
+    // Configurar fuente
+    doc.setFont("helvetica");
 
-                colIndex += monthDays;
-            }
-        });
+    let isFirstPage = true;
+    let boletinesInCurrentPage = 0;
+
+    // Generar boletín para cada estudiante
+    for (let i = 0; i < allStudentGrades.length; i++) {
+      const { student, grades } = allStudentGrades[i];
+
+      // Agregar nueva página si ya hay 2 boletines en la página actual
+      if (boletinesInCurrentPage >= 2) {
+        doc.addPage();
+        boletinesInCurrentPage = 0;
+      }
+
+      // Si no es el primer boletín y es el segundo en la página, agregar espacio
+      if (boletinesInCurrentPage === 1) {
+        // El segundo boletín comenzará más abajo en la página
+        // Se ajustará automáticamente con startY en setupIndividualBoletin
+      }
+
+      isFirstPage = false;
+
+      // Generar boletín individual
+      this.setupIndividualBoletin(
+        doc,
+        student,
+        grades,
+        course,
+        management,
+        trimester,
+        boletinesInCurrentPage // Pasamos la posición en la página
+      );
+
+      boletinesInCurrentPage++;
     }
 
-    private createDayNumbers(worksheet: any, monthlyData: any[]) {
-        const dayRow = worksheet.getRow(8);
-        const dayLabelRow = worksheet.getRow(9);
-        let colIndex = 2;
+    // Convertir a buffer
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    return pdfBuffer;
+  }
 
-        monthlyData.forEach((monthData: any) => {
-            monthData.workingDays.forEach((day: any) => {
-                // Número del día
-                const dayCell = dayRow.getCell(colIndex);
-                dayCell.value = day.day || '';
-                dayCell.alignment = { horizontal: 'center', vertical: 'middle' };
-                dayCell.font = { size: 8 };
-                dayCell.border = {
-                    top: { style: 'thin' },
-                    left: { style: 'thin' },
-                    bottom: { style: 'thin' },
-                    right: { style: 'thin' }
-                };
+  private setupIndividualBoletin(
+    doc: jsPDF,
+    student: any,
+    studentGrades: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL",
+    positionInPage: number = 0
+  ) {
+    // Crear una tabla completa que incluya todo el boletín
+    this.createCompleteBoletinTable(
+      doc,
+      student,
+      studentGrades,
+      course,
+      management,
+      trimester,
+      positionInPage
+    );
+  }
 
-                // Letra del día (L, M, X, J, V)
-                const dayLabelCell = dayLabelRow.getCell(colIndex);
-                dayLabelCell.value = day.dayLetter || 'L';
-                dayLabelCell.alignment = { horizontal: 'center', vertical: 'middle' };
-                dayLabelCell.font = { bold: true, size: 8 };
-                dayLabelCell.fill = {
-                    type: 'pattern',
-                    pattern: 'solid',
-                    fgColor: { argb: 'FFE2EFDA' }
-                };
-                dayLabelCell.border = {
-                    top: { style: 'thin' },
-                    left: { style: 'thin' },
-                    bottom: { style: 'thin' },
-                    right: { style: 'thin' }
-                };
+  private createCompleteBoletinTable(
+    doc: jsPDF,
+    student: any,
+    studentGrades: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL",
+    positionInPage: number = 0
+  ) {
+    // Calcular posición Y inicial basada en la posición en la página
+    const startY = positionInPage === 0 ? 25 : 150; // Primera posición: 25mm, segunda: 150mm
 
-                colIndex++;
-            });
-        });
-    }
+    // Calcular promedios
+    const totalQ1 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q1.total, 0) /
+      studentGrades.length;
+    const totalQ2 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q2.total, 0) /
+      studentGrades.length;
+    const totalQ3 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q3.total, 0) /
+      studentGrades.length;
+    const promedioGeneral = (totalQ1 + totalQ2 + totalQ3) / 3;
 
-    private styleDataRowMonthly(row: any) {
-        row.height = 20;
-        row.eachCell((cell: any, colNumber: number) => {
-            cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
-            };
-            
-            if (colNumber === 1) { // Nombre del estudiante
-                cell.alignment = { horizontal: 'left', vertical: 'middle' };
-            } else { // Días de asistencia
-                cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                cell.font = { bold: true, size: 9 };
-            }
-        });
-    }
+    // Calcular áreas reprobadas por trimestre
+    const areasReprobadasQ1 = studentGrades.filter(
+      (sg) => sg.trimesters.Q1.total < 51
+    ).length;
+    const areasReprobadasQ2 = studentGrades.filter(
+      (sg) => sg.trimesters.Q2.total < 51
+    ).length;
+    const areasReprobadasQ3 = studentGrades.filter(
+      (sg) => sg.trimesters.Q3.total < 51
+    ).length;
 
-    private addMainHeader(worksheet: any, course: any, subject: any, professor: any, management: any, startDate?: string, endDate?: string) {
-        // Insertar filas para el encabezado
-        worksheet.insertRow(1, []);
-        worksheet.insertRow(2, []);
-        worksheet.insertRow(3, []);
-        worksheet.insertRow(4, []);
-        worksheet.insertRow(5, []);
-        worksheet.insertRow(6, []);
+    // Crear tabla principal del boletín
+    const tableData: any[] = [];
 
-        // Título principal
-        worksheet.getCell('A1').value = 'REPORTE DE ASISTENCIA';
-        worksheet.getCell('A1').font = { bold: true, size: 16 };
-        worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    // Fila 1: Título "BOLETÍN DE NOTAS" y gestión
+    tableData.push([
+      {
+        content: "BOLETÍN DE NOTAS",
+        colSpan: 4,
+        styles: {
+          fontSize: 12, // Reducido de 14 para mayor compacidad
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [255, 255, 255],
+        },
+      },
+      {
+        content: `GESTIÓN: ${management.management}`,
+        styles: {
+          fontSize: 8, // Reducido de 9 para mayor compacidad
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [144, 238, 144],
+        },
+      },
+    ]);
 
-        // Información del reporte
-        worksheet.getCell('A2').value = `Curso: ${course?.course || 'N/A'} - Paralelo: ${course?.parallel || 'N/A'}`;
-        worksheet.getCell('A3').value = `Materia: ${subject?.subject || 'N/A'}`;
-        worksheet.getCell('A4').value = `Profesor: ${professor?.person?.name || ''} ${professor?.person?.lastname || ''} ${professor?.person?.second_lastname || ''}`.trim();
-        worksheet.getCell('A5').value = `Gestión: ${management?.management || 'N/A'}`;
-        
-        const period = startDate && endDate 
-            ? `${this.formatDate(startDate)} - ${this.formatDate(endDate)}`
-            : 'Gestión completa';
-        worksheet.getCell('A6').value = `Período: ${period}`;
+    // Fila 2: Información del estudiante
+    tableData.push([
+      {
+        content: "APELLIDOS Y NOMBRE(S)",
+        styles: {
+          fontSize: 8, // Reducido de 9 para mayor compacidad
+          fontStyle: "bold",
+          halign: "left",
+          fillColor: [240, 240, 240],
+        },
+      },
+      {
+        content: `${student.person.lastname} ${student.person.name}`,
+        colSpan: 2,
+        styles: { fontSize: 8, fontStyle: "bold", halign: "left" }, // Reducido para mayor compacidad
+      },
+      {
+        content: `CURSO: 5° "${course.course}" PRIMARIA`,
+        styles: {
+          fontSize: 8, // Reducido más para que quepa
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [144, 238, 144],
+        },
+      },
+      {
+        content: "1",
+        styles: {
+          fontSize: 14, // Reducido de 16
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [144, 238, 144],
+        },
+      },
+    ]);
 
-        // Estilo para la información
-        for (let i = 2; i <= 6; i++) {
-            worksheet.getCell(`A${i}`).font = { bold: true, size: 11 };
+    // Fila 3: Encabezado "ÁREAS CURRICULARES" y "VALORACIÓN CUANTITATIVA"
+    tableData.push([
+      {
+        content: "ÁREAS CURRICULARES",
+        styles: {
+          fontSize: 9, // Reducido de 10
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "VALORACIÓN CUANTITATIVA",
+        colSpan: 4,
+        styles: {
+          fontSize: 9, // Reducido de 10
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+    ]);
+
+    // Fila 4: Subencabezados de trimestres
+    tableData.push([
+      { content: "", styles: { fillColor: [200, 200, 200] } },
+      {
+        content: "1° TRIM",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "2° TRIM",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "3° TRIM",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+      {
+        content: "PROMEDIO ANUAL",
+        styles: {
+          fontSize: 8, // Reducido de 9
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [200, 200, 200],
+        },
+      },
+    ]);
+
+    // Agregar materias con colores para notas reprobadas
+    studentGrades.forEach((subjectGrade) => {
+      const q1Grade = Math.round(subjectGrade.trimesters.Q1.total);
+      const q2Grade = Math.round(subjectGrade.trimesters.Q2.total);
+      const q3Grade = Math.round(subjectGrade.trimesters.Q3.total);
+      const finalGrade = Math.round(subjectGrade.finalAverage);
+
+      tableData.push([
+        subjectGrade.assignment.subject.subject.toUpperCase(),
+        {
+          content: q1Grade.toString(),
+          styles: {
+            halign: "center",
+            textColor: q1Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+        {
+          content: q2Grade.toString(),
+          styles: {
+            halign: "center",
+            textColor: q2Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+        {
+          content: q3Grade.toString(),
+          styles: {
+            halign: "center",
+            textColor: q3Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+        {
+          content: finalGrade.toString(),
+          styles: {
+            halign: "center",
+            textColor: finalGrade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+          },
+        },
+      ]);
+    });
+
+    // Fila de promedio trimestral
+    tableData.push([
+      {
+        content: "PROMEDIO TRIMESTRAL:",
+        styles: { fontStyle: "bold", fillColor: [245, 245, 245] },
+      },
+      {
+        content: Math.round(totalQ1).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+      {
+        content: Math.round(totalQ2).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+      {
+        content: Math.round(totalQ3).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+      {
+        content: Math.round(promedioGeneral).toString(),
+        styles: {
+          fontStyle: "bold",
+          halign: "center",
+          fillColor: [245, 245, 245],
+        },
+      },
+    ]);
+
+    // Fila de áreas reprobadas por trimestre
+    tableData.push([
+      { content: "Total - Áreas Reprobadas", styles: { fontStyle: "bold" } },
+      {
+        content: areasReprobadasQ1.toString(),
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+      {
+        content: areasReprobadasQ2.toString(),
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+      {
+        content: areasReprobadasQ3.toString(),
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+      {
+        content: "-",
+        styles: { fontStyle: "bold", halign: "center" },
+      },
+    ]);
+
+    // Generar la tabla con anchos optimizados para A4
+    autoTable(doc, {
+      body: tableData,
+      startY: startY,
+      styles: {
+        fontSize: 7, // Reducido de 8 para que sea más compacto
+        cellPadding: 1.5, // Reducido de 2 para menos espacio
+        lineColor: [0, 0, 0],
+        lineWidth: 0.5,
+        halign: "center",
+      },
+      columnStyles: {
+        0: { cellWidth: 70, halign: "left" }, // Áreas curriculares más compacta
+        1: { cellWidth: 22 }, // 1° TRIM
+        2: { cellWidth: 22 }, // 2° TRIM
+        3: { cellWidth: 22 }, // 3° TRIM
+        4: { cellWidth: 28 }, // PROMEDIO ANUAL
+      },
+      margin: { left: 15, right: 15 }, // Márgenes más pequeños
+      theme: "grid",
+      tableWidth: "wrap", // Ajuste automático
+    });
+  }
+
+  private setupBoletinTableNew(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const startY = 115;
+
+    // Preparar encabezados y datos de la tabla
+    const headers = [
+      "ÁREAS CURRICULARES",
+      "1° TRIM",
+      "2° TRIM",
+      "3° TRIM",
+      "PROMEDIO FINAL",
+    ];
+    const tableData: any[] = [];
+
+    // Agregar datos de cada materia
+    studentGrades.forEach((subjectGrade) => {
+      const row = [
+        subjectGrade.assignment.subject.subject.toUpperCase(),
+        Math.round(subjectGrade.trimesters.Q1.total).toString(),
+        Math.round(subjectGrade.trimesters.Q2.total).toString(),
+        Math.round(subjectGrade.trimesters.Q3.total).toString(),
+        Math.round(subjectGrade.finalAverage).toString(),
+      ];
+      tableData.push(row);
+    });
+
+    // Calcular promedios trimestrales
+    const totalQ1 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q1.total, 0) /
+      studentGrades.length;
+    const totalQ2 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q2.total, 0) /
+      studentGrades.length;
+    const totalQ3 =
+      studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q3.total, 0) /
+      studentGrades.length;
+    const promedioGeneral = (totalQ1 + totalQ2 + totalQ3) / 3;
+
+    // Agregar fila de promedio trimestral
+    tableData.push([
+      "PROMEDIO TRIMESTRAL:",
+      Math.round(totalQ1).toString(),
+      Math.round(totalQ2).toString(),
+      Math.round(totalQ3).toString(),
+      Math.round(promedioGeneral).toString(),
+    ]);
+
+    // Generar tabla
+    autoTable(doc, {
+      head: [headers],
+      body: tableData,
+      startY: startY,
+      styles: {
+        fontSize: 10,
+        cellPadding: 3,
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: [200, 200, 200],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+      },
+      columnStyles: {
+        0: { cellWidth: 80, halign: "left" },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 35 },
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
+      margin: { left: 20, right: 20 },
+      // Estilo especial para la última fila (promedio)
+      didParseCell: function (data) {
+        if (data.row.index === tableData.length - 1) {
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.fillColor = [220, 220, 220];
         }
+      },
+    });
+  }
+
+  private setupBoletinFooterNew(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+
+    // Calcular promedio final
+    const promedioFinal =
+      studentGrades.reduce((sum, sg) => sum + sg.finalAverage, 0) /
+      studentGrades.length;
+
+    // Calcular áreas reprobadas
+    const areasReprobadas = studentGrades.filter(
+      (sg) => sg.finalAverage < 51
+    ).length;
+
+    // Situación académica
+    const situacion = promedioFinal >= 51 ? "APROBADO" : "REPROBADO";
+    const colorSituacion = promedioFinal >= 51 ? [0, 128, 0] : [255, 0, 0];
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+
+    // Total áreas reprobadas
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total - Áreas Reprobadas: ${areasReprobadas}`, 20, finalY);
+
+    // Promedio final
+    doc.text(`PROMEDIO FINAL: ${Math.round(promedioFinal)}`, 20, finalY + 15);
+
+    // Situación
+    doc.setTextColor(colorSituacion[0], colorSituacion[1], colorSituacion[2]);
+    doc.text(`SITUACIÓN: ${situacion}`, 120, finalY + 15);
+
+    // Restablecer color
+    doc.setTextColor(0, 0, 0);
+
+    // Fecha de generación
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const fecha = new Date().toLocaleDateString("es-ES");
+    doc.text(`Generado el: ${fecha}`, 20, finalY + 35);
+  }
+
+  private async generateBoletinPDF(
+    student: any,
+    studentGrades: any[],
+    assignments: any[],
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ): Promise<Buffer> {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    // Configurar fuente
+    doc.setFont("helvetica");
+
+    // Encabezado del boletín
+    this.setupBoletinHeader(doc, student, course, management, trimester);
+
+    // Tabla de materias y calificaciones
+    this.setupBoletinTable(doc, studentGrades, trimester);
+
+    // Promedio trimestral y observaciones
+    this.setupBoletinFooter(doc, studentGrades, trimester);
+
+    // Convertir a buffer
+    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    return pdfBuffer;
+  }
+
+  private setupBoletinHeader(
+    doc: jsPDF,
+    student: any,
+    course: any,
+    management: any,
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    // Título principal
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("BOLETÍN DE CALIFICACIONES", 105, 20, { align: "center" });
+
+    // Información del estudiante
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+
+    // Nombre del estudiante
+    doc.text("APELLIDOS Y NOMBRE(S):", 20, 40);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${student.person.lastname} ${student.person.name}`, 20, 50);
+
+    // Curso y trimestre
+    doc.setFont("helvetica", "normal");
+    doc.text("CURSO:", 140, 40);
+    doc.setFont("helvetica", "bold");
+    doc.text(`5° "${course.course}"`, 140, 50);
+    doc.text("PRIMARIA", 140, 58);
+
+    // Período
+    const trimesterText =
+      trimester === "ANUAL"
+        ? "ANUAL"
+        : trimester === "Q1"
+        ? "1° TRIM"
+        : trimester === "Q2"
+        ? "2° TRIM"
+        : "3° TRIM";
+
+    doc.setFont("helvetica", "normal");
+    doc.text("PERÍODO:", 140, 70);
+    doc.setFont("helvetica", "bold");
+    doc.text(trimesterText, 140, 78);
+
+    // Gestión
+    doc.setFont("helvetica", "normal");
+    doc.text("GESTIÓN:", 140, 90);
+    doc.setFont("helvetica", "bold");
+    doc.text(management.management.toString(), 140, 98);
+  }
+
+  private setupBoletinTable(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const startY = 115;
+
+    // Preparar datos de la tabla
+    const headers = ["ÁREAS CURRICULARES"];
+    const columnStyles: any = { 0: { cellWidth: 120 } };
+
+    if (trimester === "ANUAL") {
+      headers.push("1° TRIM", "2° TRIM", "3° TRIM", "PROMEDIO ANUAL");
+      columnStyles[1] = { cellWidth: 20 };
+      columnStyles[2] = { cellWidth: 20 };
+      columnStyles[3] = { cellWidth: 20 };
+      columnStyles[4] = { cellWidth: 25 };
+    } else {
+      headers.push("VALORACIÓN CUANTITATIVA");
+      columnStyles[1] = { cellWidth: 65 };
     }
 
-    private styleColumnHeaders(worksheet: any, headerRow: number, datesCount: number) {
-        const headerRowObj = worksheet.getRow(headerRow);
-        headerRowObj.height = 25;
-        
-        headerRowObj.eachCell((cell: any) => {
-            cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FF4472C4' }
-            };
-            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
-            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-            cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
-            };
-        });
+    const tableData: any[] = [];
+
+    // Agregar materias
+    studentGrades.forEach((subjectGrade) => {
+      const row = [subjectGrade.assignment.subject.subject.toUpperCase()];
+
+      if (trimester === "ANUAL") {
+        row.push(
+          Math.round(subjectGrade.trimesters.Q1.total).toString(),
+          Math.round(subjectGrade.trimesters.Q2.total).toString(),
+          Math.round(subjectGrade.trimesters.Q3.total).toString(),
+          Math.round(subjectGrade.finalAverage).toString()
+        );
+      } else {
+        const trimesterGrade = trimester
+          ? subjectGrade.trimesters[trimester].total
+          : 0;
+        row.push(Math.round(trimesterGrade).toString());
+      }
+
+      tableData.push(row);
+    });
+
+    // Calcular promedio trimestral
+    let promedioTotal = 0;
+    if (trimester === "ANUAL") {
+      const totalQ1 =
+        studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q1.total, 0) /
+        studentGrades.length;
+      const totalQ2 =
+        studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q2.total, 0) /
+        studentGrades.length;
+      const totalQ3 =
+        studentGrades.reduce((sum, sg) => sum + sg.trimesters.Q3.total, 0) /
+        studentGrades.length;
+      const promedioAnual = (totalQ1 + totalQ2 + totalQ3) / 3;
+
+      tableData.push([
+        "PROMEDIO TRIMESTRAL:",
+        Math.round(totalQ1).toString(),
+        Math.round(totalQ2).toString(),
+        Math.round(totalQ3).toString(),
+        Math.round(promedioAnual).toString(),
+      ]);
+      promedioTotal = promedioAnual;
+    } else {
+      const promedioTrimestre =
+        studentGrades.reduce((sum, sg) => {
+          const grade = trimester ? sg.trimesters[trimester].total : 0;
+          return sum + grade;
+        }, 0) / studentGrades.length;
+
+      tableData.push([
+        "PROMEDIO TRIMESTRAL:",
+        Math.round(promedioTrimestre).toString(),
+      ]);
+      promedioTotal = promedioTrimestre;
     }
 
-    private styleDataRow(row: any, datesCount: number) {
-        row.height = 20;
-        row.eachCell((cell: any, colNumber: number) => {
-            cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
-            };
-            
-            // Alineación específica por tipo de columna
-            if (colNumber === 1) { // Número
-                cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            } else if (colNumber <= 4) { // CI, RUDE, Nombre
-                cell.alignment = { horizontal: 'left', vertical: 'middle' };
-            } else if (colNumber <= 4 + datesCount) { // Fechas de asistencia
-                cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                cell.font = { bold: true };
-            } else { // Estadísticas
-                cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            }
-        });
+    // Agregar fila de áreas reprobadas
+    const areasReprobadas = studentGrades.filter((sg) => {
+      if (trimester === "ANUAL") {
+        return sg.finalAverage < 51;
+      } else {
+        const grade = trimester ? sg.trimesters[trimester].total : 0;
+        return grade < 51;
+      }
+    }).length;
+
+    if (trimester === "ANUAL") {
+      tableData.push([
+        "Total - Áreas Reprobadas",
+        areasReprobadas.toString(),
+        "",
+        "",
+        "",
+      ]);
+    } else {
+      tableData.push(["Total - Áreas Reprobadas", areasReprobadas.toString()]);
     }
 
-    private addSummaryRow(worksheet: any, data: any) {
-        const summaryRow = worksheet.addRow({
-            number: '',
-            ci: '',
-            rude: '',
-            fullName: 'RESUMEN GENERAL',
-            present: data.students.reduce((sum: number, s: any) => sum + s.statistics.presentCount, 0),
-            absent: data.students.reduce((sum: number, s: any) => sum + s.statistics.absentCount, 0),
-            late: data.students.reduce((sum: number, s: any) => sum + s.statistics.lateCount, 0),
-            percentage: `${data.summary.overallAttendanceRate}%`
-        });
+    // Generar tabla
+    autoTable(doc, {
+      head: [headers],
+      body: tableData,
+      startY: startY,
+      styles: {
+        fontSize: 10,
+        cellPadding: 3,
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: [200, 200, 200],
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+      },
+      columnStyles: columnStyles,
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
+      margin: { left: 20, right: 20 },
+    });
+  }
 
-        // Estilo para fila de resumen
-        summaryRow.eachCell((cell: any) => {
-            cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FFE2EFDA' }
-            };
-            cell.font = { bold: true };
-            cell.border = {
-                top: { style: 'thick' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
-            };
-        });
+  private setupBoletinFooter(
+    doc: jsPDF,
+    studentGrades: any[],
+    trimester?: "Q1" | "Q2" | "Q3" | "ANUAL"
+  ) {
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+
+    // Calcular promedio final
+    let promedioFinal = 0;
+    if (trimester === "ANUAL") {
+      promedioFinal =
+        studentGrades.reduce((sum, sg) => sum + sg.finalAverage, 0) /
+        studentGrades.length;
+    } else {
+      promedioFinal =
+        studentGrades.reduce((sum, sg) => {
+          const grade = trimester ? sg.trimesters[trimester].total : 0;
+          return sum + grade;
+        }, 0) / studentGrades.length;
     }
 
-    private addLegend(worksheet: any) {
-        const lastRow = worksheet.rowCount;
-        
-        worksheet.addRow([]);
-        worksheet.addRow(['LEYENDA:']);
-        worksheet.addRow(['P = Presente']);
-        worksheet.addRow(['A = Ausente/Falta']);
-        worksheet.addRow(['L = Licencia']);
-        worksheet.addRow(['T = Tardanza']);
-        worksheet.addRow(['- = No registrado']);
+    // Situación académica
+    const situacion = promedioFinal >= 51 ? "APROBADO" : "REPROBADO";
+    const colorSituacion = promedioFinal >= 51 ? [0, 128, 0] : [255, 0, 0];
 
-        // Estilo para la leyenda
-        for (let i = lastRow + 2; i <= lastRow + 7; i++) {
-            worksheet.getCell(`A${i}`).font = { bold: true, size: 10 };
-        }
-    }
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`PROMEDIO FINAL: ${Math.round(promedioFinal)}`, 20, finalY);
 
-    private getAttendanceSymbol(status: string | null): string {
-        if (!status) return '-';
-        
-        switch (status.toUpperCase()) {
-            case 'P': 
-                return 'P'; // Presente
-            case 'F': 
-                return 'A'; // Falta -> Ausente
-            case 'L': 
-                return 'L'; // Licencia
-            case 'T': 
-                return 'T'; // Tardanza (si existe)
-            default: 
-                return '-';
-        }
-    }
+    doc.setTextColor(colorSituacion[0], colorSituacion[1], colorSituacion[2]);
+    doc.text(`SITUACIÓN: ${situacion}`, 120, finalY);
 
-    private formatDateForHeader(dateString: string): string {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('es-ES', { 
-            day: '2-digit', 
-            month: '2-digit'
-        });
-    }
+    // Restablecer color
+    doc.setTextColor(0, 0, 0);
 
-    private formatDate(dateString: string): string {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('es-ES');
-    }
+    // Fecha de generación
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const fecha = new Date().toLocaleDateString("es-ES");
+    doc.text(`Generado el: ${fecha}`, 20, finalY + 20);
+  }
 
-    private generateFileName(course: any, subject: any, professor: any, management: any): string {
-        const courseName = course?.course?.replace(/\s+/g, '_') || 'curso';
-        const subjectName = subject?.subject?.replace(/\s+/g, '_') || 'materia';
-        const dateStr = new Date().toISOString().split('T')[0];
-        
-        return `reporte_asistencia_${courseName}_${subjectName}_${dateStr}.xlsx`;
+  private async uploadBoletinToFirebase(
+    buffer: Buffer,
+    fileName: string
+  ): Promise<string> {
+    try {
+      const storageRef = ref(this.storage, `reports/boletines/${fileName}`);
+      const snapshot = await uploadBytes(storageRef, buffer);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("Error uploading boletin to Firebase:", error);
+      throw new Error("Error al subir el boletín a Firebase");
     }
-
-    private async uploadToFirebase(buffer: Uint8Array, fileName: string): Promise<string> {
-        try {
-            const storageRef = ref(this.storage, `reports/attendance/${fileName}`);
-            const snapshot = await uploadBytes(storageRef, buffer);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            return downloadURL;
-        } catch (error) {
-            console.error('Error uploading to Firebase:', error);
-            throw new Error('Error al subir el archivo a Firebase');
-        }
-    }
+  }
 }
