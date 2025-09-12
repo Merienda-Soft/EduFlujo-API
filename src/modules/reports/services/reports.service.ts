@@ -148,38 +148,26 @@ export class ReportsService {
     });
   }
 
-    private async getStudentsByCourse(courseId: number) {
-        return await this.db.registration.findMany({
-            where: { 
-                course_id: courseId,
-                status: 1,
-            },
-            include: {
-                student: {
-                    where: {
-                        status: 1,
-                    },
-                    include: {
-                        person: {
-                            select: {
-                                name: true,
-                                lastname: true,
-                                second_lastname: true,
-                                ci: true
-                            }
-                        }
-                    }
-                }
-            },
-            orderBy: {
-                student: {
-                    person: {
-                        lastname: 'asc'
-                    }
-                }
-            }
-        });
-    }
+  private async getStudentsByCourse(courseId: number) {
+    return await this.db.registration.findMany({
+      where: {
+        course_id: courseId,
+        // status: 1  // Remover si no existe este campo en Registration
+      },
+      include: {
+        student: {
+          include: {
+            person: true,
+          },
+        },
+      },
+      orderBy: [
+        { student: { person: { lastname: "asc" } } },
+        { student: { person: { second_lastname: "asc" } } },
+        { student: { person: { name: "asc" } } },
+      ],
+    });
+  }
 
   private async getAttendanceData(
     courseId: number,
@@ -203,25 +191,20 @@ export class ReportsService {
       };
     }
 
-        const attendanceRecords = await this.db.attendance.findMany({
-            where: {
-                ...whereClause,
-                status: 1,
-            },
-            include: {
-                course: true,
-                subject: true,
-                professor: {
-                    include: {
-                        person: true
-                    }
-                },
-                management: true
-            },
-            orderBy: [
-                { attendance_date: 'asc' }
-            ]
-        });
+    const attendanceRecords = await this.db.attendance.findMany({
+      where: whereCondition,
+      include: {
+        course: true,
+        subject: true,
+        professor: {
+          include: {
+            person: true,
+          },
+        },
+        management: true,
+      },
+      orderBy: [{ attendance_date: "asc" }],
+    });
 
     console.log("Raw attendance records:", attendanceRecords.length);
     if (attendanceRecords.length > 0) {
