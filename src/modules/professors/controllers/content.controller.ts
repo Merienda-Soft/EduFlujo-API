@@ -11,7 +11,7 @@ export class ContentController {
     async submitContent(req: Request, res: Response) {
         try {
             const { courseId, subjectId, managementId } = req.params;
-            const { file } = req.body;
+            const { file, created_by } = req.body;
 
             if (!courseId || !subjectId || !managementId || !file) {
                 return res.status(400).json({
@@ -24,7 +24,8 @@ export class ContentController {
                 Number(courseId),
                 Number(subjectId),
                 Number(managementId),
-                file
+                file,
+                created_by
             );
 
             return res.status(200).json({
@@ -79,6 +80,7 @@ export class ContentController {
     async deleteContent(req: Request, res: Response) {
         try {
             const { id } = req.params;
+            const { deleted_by } = req.body;
 
             if (!id) {
                 return res.status(400).json({
@@ -87,7 +89,7 @@ export class ContentController {
                 });
             }
 
-            await this.contentService.deleteContent(Number(id));
+            await this.contentService.deleteContent(Number(id), deleted_by);
 
             return res.status(200).json({
                 ok: true,

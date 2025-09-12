@@ -6,13 +6,18 @@ export class ProfessorService {
     async getProfessorByEmail(email: string) {
         return await this.db.professor.findFirst({
             where: {
+                status: 1,
                 person: {
-                    email: email
+                    email: email,
+                    status: 1,
                 }
             },
             include: {
                 person: true,
                 assignments: {
+                    where: {
+                        status: { in: [1, 2] },
+                    },
                     include: {
                         course: true,
                         subject: true
@@ -24,6 +29,12 @@ export class ProfessorService {
 
     async getAllProfessors() {
       return await this.db.professor.findMany({
+        where: {
+          status: 1,
+          person: {
+            status: 1,
+          },
+        },
         include: {
           person: {
             select: {
@@ -55,6 +66,7 @@ export class ProfessorService {
         is_tecnical: number;
         subjects: string;
         temporary_password: string;
+        created_by?: number;
       }) {
       return await this.db.$transaction(async (transaction) => {
       // Normalización de datos de ubicación
@@ -205,13 +217,17 @@ export class ProfessorService {
     parentId?: number
   ) {
     if (model === 'country') {
-      return { country: name };
+      return { 
+        country: name,
+        status: 1,
+      };
     }
 
     const parentField = this.getParentField(model);
     return {
       [model]: name,
       [parentField]: parentId,
+      status: 1,
     };
   }
 
@@ -232,7 +248,10 @@ export class ProfessorService {
    */
   private async checkProfessorExists(transaction: any, email: string) {
     const existingPerson = await transaction.person.findFirst({
-      where: { email },
+      where: { 
+        email,
+        status: 1,
+      },
     });
 
     if (existingPerson) {
@@ -256,6 +275,7 @@ export class ProfessorService {
       is_tecnical: number;
       subjects: string;
       temporary_password: string;
+      created_by?: number;
     },
     townId: number
     ) {
@@ -271,6 +291,7 @@ export class ProfessorService {
         status: 1,
         town_id: townId,
         temp_password: professorData.temporary_password,
+        created_by: professorData.created_by || null,
       },
     });
 
@@ -280,6 +301,7 @@ export class ProfessorService {
         is_tecnical: professorData.is_tecnical,
         subjects: professorData.subjects,
         status: 1,
+        created_by: professorData.created_by || null,
       },
     });
 

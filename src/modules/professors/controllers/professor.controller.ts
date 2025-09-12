@@ -38,8 +38,12 @@ export class ProfessorController {
     async createProfessor(req: Request, res: Response) {
         try {
             const professorData = req.body;
+            const { created_by } = req.body;
 
-            const professor = await this.service.createProfessor(professorData);
+            const professor = await this.service.createProfessor({
+                ...professorData,
+                created_by,
+            });
             res.status(201).json({ professor, success: true });
         } catch (error) {
             this.handleError(res, error);

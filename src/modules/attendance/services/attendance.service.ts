@@ -5,11 +5,13 @@ export class AttendanceService {
     private db = Database.getInstance();
 
     // Crear un nuevo registro de asistencia
-    async createAttendance(data: CreateAttendanceDto) {
+    async createAttendance(data: CreateAttendanceDto, created_by?: number) {
         return await this.db.attendance.create({
             data: {
                 attendance_date: data.attendance_date,
                 quarter: data.quarter,
+                status: 1,
+                created_by: created_by || null,
                 management: {
                     connect: { id: data.management_id }
                 },
@@ -27,7 +29,7 @@ export class AttendanceService {
     }
 
     // Registrar la asistencia de un estudiante
-    async createAttendanceRecord(data: CreateAttendanceRecordDto) {
+    async createAttendanceRecord(data: CreateAttendanceRecordDto, created_by?: number) {
         return await this.db.attendanceRecord.create({
             data: {
                 attendance: {
@@ -36,19 +38,23 @@ export class AttendanceService {
                 student: {
                     connect: { id: data.student_id }
                 },
-                status_attendance: data.status_attendance
+                status_attendance: data.status_attendance,
+                status: 1,
+                created_by: created_by || null
             }
         });
     }
 
     // Registrar la asistencia de múltiples estudiantes a la vez
-    async registerAttendance(data: RegisterAttendanceDto) {
+    async registerAttendance(data: RegisterAttendanceDto, created_by?: number) {
         return await this.db.$transaction(async (tx) => {
             // Crear el registro principal de asistencia
             const attendance = await tx.attendance.create({
                 data: {
                     attendance_date: data.attendance.attendance_date,
                     quarter: data.attendance.quarter,
+                    status: 1,
+                    created_by: created_by || null,
                     management: {
                         connect: { id: data.attendance.management_id }
                     },
@@ -75,7 +81,9 @@ export class AttendanceService {
                             student: {
                                 connect: { id: record.student_id }
                             },
-                            status_attendance: record.status_attendance
+                            status_attendance: record.status_attendance,
+                            status: 1,
+                            created_by: created_by || null
                         }
                     });
                 } catch (error) {
@@ -89,7 +97,8 @@ export class AttendanceService {
                                 }
                             },
                             data: {
-                                status_attendance: record.status_attendance
+                                status_attendance: record.status_attendance,
+                                updated_by: created_by || null
                             }
                         });
                     } else {
@@ -125,6 +134,7 @@ export class AttendanceService {
             where: {
                 course_id: courseId,
                 subject_id: subjectId,
+                status: 1, // Solo registros activos
                 attendance_date: {
                     gte: new Date(date.setHours(0, 0, 0, 0)),
                     lt: new Date(date.setHours(23, 59, 59, 999))
@@ -183,6 +193,7 @@ export class AttendanceService {
         const attendances = await this.db.attendance.findMany({
             where: {
                 course_id: courseId,
+                status: 1, // Solo registros activos
                 attendance_date: {
                     gte: new Date(date.setHours(0, 0, 0, 0)),
                     lt: new Date(date.setHours(23, 59, 59, 999))
@@ -225,7 +236,7 @@ export class AttendanceService {
     }
 
     // Actualizar el estado de asistencia de un estudiante
-    async updateAttendanceRecord(attendanceId: number, studentId: number, data: UpdateAttendanceRecordDto) {
+    async updateAttendanceRecord(attendanceId: number, studentId: number, data: UpdateAttendanceRecordDto, updated_by?: number) {
         // Con el nuevo esquema, podemos actualizar directamente usando la clave compuesta
         return await this.db.attendanceRecord.update({
             where: {
@@ -235,7 +246,8 @@ export class AttendanceService {
                 }
             },
             data: {
-                status_attendance: data.status_attendance
+                status_attendance: data.status_attendance,
+                updated_by: updated_by || null
             }
         });
     }
@@ -245,9 +257,11 @@ export class AttendanceService {
         const records = await this.db.attendanceRecord.findMany({
             where: {
                 student_id: studentId,
+                status: 1, // Solo registros activos
                 attendance: {
                     course_id: courseId,
-                    subject_id: subjectId
+                    subject_id: subjectId,
+                    status: 1 // Solo asistencias activas
                 }
             },
             include: {
@@ -270,7 +284,7 @@ export class AttendanceService {
     }
 
     // Actualizar el estado de asistencia de múltiples estudiantes a la vez
-    async updateMultipleAttendanceRecords(data: UpdateMultipleAttendanceRecordsDto) {
+    async updateMultipleAttendanceRecords(data: UpdateMultipleAttendanceRecordsDto, updated_by?: number) {
         return await this.db.$transaction(async (tx) => {
             const results = [];
             
@@ -294,7 +308,8 @@ export class AttendanceService {
                             }
                         },
                         data: {
-                            status_attendance: student.status_attendance
+                            status_attendance: student.status_attendance,
+                            updated_by: updated_by || null
                         }
                     });
                     

@@ -30,7 +30,12 @@ export class CourseController {
   async createCourse(req: Request, res: Response) {
     try {
       const courseData = req.body;
-      const newCourse = await this.courseService.createCourse(courseData);
+      const { created_by } = req.body;
+      
+      const newCourse = await this.courseService.createCourse({
+        ...courseData,
+        created_by,
+      });
       res.status(201).json(newCourse);
     } catch (error) {
       this.handleError(res, error);
@@ -41,7 +46,12 @@ export class CourseController {
     try {
       const { id } = req.params;
       const courseData = req.body;
-      const updatedCourse = await this.courseService.updateCourse(Number(id), courseData);
+      const { updated_by } = req.body;
+      
+      const updatedCourse = await this.courseService.updateCourse(Number(id), {
+        ...courseData,
+        updated_by,
+      });
       res.status(200).json(updatedCourse);
     } catch (error) {
       this.handleError(res, error);
@@ -51,7 +61,9 @@ export class CourseController {
   async activatedCourse(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      await this.courseService.activatedCourse(Number(id));
+      const { updated_by } = req.body;
+      
+      await this.courseService.activatedCourse(Number(id), updated_by);
       res.status(200).json({ message: 'Course active successfully' });
     } catch (error) {
       this.handleError(res, error);
@@ -61,7 +73,9 @@ export class CourseController {
   async deleteCourse(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      await this.courseService.deactivatedCourse(Number(id));
+      const { updated_by } = req.body;
+      
+      await this.courseService.deactivatedCourse(Number(id), updated_by);
       res.status(200).json({ message: 'Course deleted successfully' });
     } catch (error) {
       this.handleError(res, error);

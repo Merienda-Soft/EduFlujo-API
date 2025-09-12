@@ -48,6 +48,23 @@ export class ManagementController {
     }
   }
 
+  async getUserByEmail(req: Request, res: Response) {
+    try {
+      const { email } = req.params;
+      
+      if (!email) {
+        return res.status(400).json({ 
+          message: 'Se requiere el email del usuario.' 
+        });
+      }
+
+      const result = await this.managementService.getUserByEmail(email);
+      res.status(200).json(result);
+    } catch (error) {
+      this.handleError(res, error);
+    }
+  }
+
 
   async getById(req: Request, res: Response) {
     try {
@@ -62,7 +79,9 @@ export class ManagementController {
   async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      await this.managementService.deactivateManagement(Number(id));
+      const { updated_by } = req.body;
+      
+      await this.managementService.deactivateManagement(Number(id), updated_by);
       res.status(200).json({ 
         message: 'Management deactivated successfully',
         status: 0
@@ -74,9 +93,14 @@ export class ManagementController {
 
   async createEnvironment(req: Request, res: Response) {
     try {
-      const { managementData, gradeCourseData, subjectIds } = req.body;
+      const { managementData, gradeCourseData, subjectIds, created_by } = req.body;
 
-      const result = await this.environmentService.CreateEnvironment(managementData, gradeCourseData, subjectIds);
+      const result = await this.environmentService.CreateEnvironment(
+        managementData, 
+        gradeCourseData, 
+        subjectIds,
+        created_by
+      );
 
       res.status(201).json({
         message: 'La gestion ha sido creada exitosamente',
@@ -89,7 +113,7 @@ export class ManagementController {
 
   async cloneAcademicStructure(req: Request, res: Response) {
     try {
-        const { sourceManagementId, newManagementYear, quarterDates } = req.body;
+        const { sourceManagementId, newManagementYear, quarterDates, created_by } = req.body;
 
         if (!sourceManagementId || !newManagementYear || !quarterDates) {
             return res.status(400).json({
@@ -100,7 +124,8 @@ export class ManagementController {
         const result = await this.managementService.cloneAcademicStructure(
             Number(sourceManagementId),
             Number(newManagementYear),
-            quarterDates
+            quarterDates,
+            created_by
         );
 
         res.status(200).json(result);

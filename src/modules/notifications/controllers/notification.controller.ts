@@ -12,7 +12,9 @@ export class NotificationController {
     async createNotification(req: Request, res: Response) {
         try {
             const data: CreateNotificationDto = req.body;
-            const notification = await this.notificationService.createNotification(data);
+            const { created_by } = req.body;
+            
+            const notification = await this.notificationService.createNotification(data, created_by);
             res.status(201).json(notification);
         } catch (error) {
             res.status(500).json({

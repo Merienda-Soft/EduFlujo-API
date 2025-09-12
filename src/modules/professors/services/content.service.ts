@@ -3,12 +3,13 @@ import Database from '../../../shared/database/connection';
 export class ContentService {
     private db = Database.getInstance();
 
-    async submitContent(courseId: number, subjectId: number, managementId: number, file: { name: string; url: string }) {
+    async submitContent(courseId: number, subjectId: number, managementId: number, file: { name: string; url: string }, created_by?: number) {
         return await this.db.$transaction(async (tx) => {
             // Verificar que el curso existe
             const course = await tx.course.findUnique({
                 where: {
-                    id: courseId
+                    id: courseId,
+                    status: 1,
                 }
             });
 
@@ -19,7 +20,8 @@ export class ContentService {
             // Verificar que la materia existe
             const subject = await tx.subject.findUnique({
                 where: {
-                    id: subjectId
+                    id: subjectId,
+                    status: 1,
                 }
             });
 
@@ -30,7 +32,8 @@ export class ContentService {
             // Verificar que la gestión existe
             const management = await tx.management.findUnique({
                 where: {
-                    id: managementId
+                    id: managementId,
+                    status: 1,
                 }
             });
 
@@ -46,7 +49,9 @@ export class ContentService {
                     management_id: managementId,
                     file: file,
                     submitted_at: new Date(),
-                    last_update: new Date()
+                    last_update: new Date(),
+                    status: 1,
+                    created_by: created_by || null,
                 }
             });
         });
@@ -57,7 +62,8 @@ export class ContentService {
             where: {
                 course_id: courseId,
                 subject_id: subjectId,
-                management_id: managementId
+                management_id: managementId,
+                status: 1,
             },
             orderBy: {
                 submitted_at: 'desc'
@@ -65,10 +71,12 @@ export class ContentService {
         });
     }
 
-    async deleteContent(id: number) {
-        return await this.db.content.delete({
-            where: {
-                id: id
+    async deleteContent(id: number, deleted_by?: number) {
+        return await this.db.content.update({
+            where: { id },
+            data: {
+                status: 0,
+                updated_by: deleted_by || null,
             }
         });
     }

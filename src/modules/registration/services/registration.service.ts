@@ -3,11 +3,11 @@ import { emailService } from './email.service';
 import { AuthService } from '../../auth/services/auth.service';
 
 export class RegistrationService {
-  async registerStudents(dataAssignment: any[], registrationData: { courseId: number; managementId: number }) {
+  async registerStudents(dataAssignment: any[], registrationData: { courseId: number; managementId: number; created_by?: number }) {
     const db = Database.getInstance();
     const email = new emailService();
     const authService = new AuthService(); 
-    const { courseId, managementId } = registrationData;
+    const { courseId, managementId, created_by } = registrationData;
 
     return await db.$transaction(
       async (transaction) => {
@@ -97,6 +97,7 @@ export class RegistrationService {
             town_id: town.id,
             email: email.generateStudentEmail(student.name, student.rude, student.datebirth),
             temp_password: email.generateMemorablePassword(),
+            created_by: created_by || null,
           },
         });
 
@@ -105,6 +106,8 @@ export class RegistrationService {
             id: person.id,
             matricula: student.matricula || null,
             rude: student.rude,
+            status: 1,
+            created_by: created_by || null,
           },
         });
 
@@ -114,6 +117,8 @@ export class RegistrationService {
             course_id: courseId,
             student_id: studentRecord.id,
             management_id: managementId,
+            status: 1,
+            created_by: created_by || null,
           },
         });
 
@@ -144,14 +149,14 @@ export class RegistrationService {
     });
   }
 
-  async updateStudent(registrationUpdates: { registrationId: number; data: any }[]) {
+  async updateStudent(registrationUpdates: { registrationId: number; data: any; updated_by?: number }[]) {
     console.log('registrationUpdates', registrationUpdates);
     const db = Database.getInstance();
   
     return await db.$transaction(async (transaction) => {
       const updatedRecords = [];
   
-      for (const { registrationId, data } of registrationUpdates) {
+      for (const { registrationId, data, updated_by } of registrationUpdates) {
         // Obtener el registro de inscripción
         const registration = await transaction.registration.findUnique({
           where: { id: registrationId },
@@ -266,6 +271,7 @@ export class RegistrationService {
             ci: data.ci || null,
             birth_date: data.datebirth ? new Date(data.datebirth) : null,
             town_id: town.id, // Asociar la nueva localidad
+            updated_by: updated_by || null,
           },
         });
   
@@ -275,6 +281,7 @@ export class RegistrationService {
           data: {
             matricula: data.matricula || null,
             rude: data.rude ? data.rude : null,
+            updated_by: updated_by || null,
           },
         });
   
@@ -292,9 +299,15 @@ export class RegistrationService {
     const db = Database.getInstance();
   
     return await db.registration.findMany({
-      where: { course_id: courseId },
+      where: { 
+        course_id: courseId,
+        status: 1,
+      },
       include: {
         student: {
+          where: {
+            status: 1,
+          },
           include: {
             person: {
               include: {

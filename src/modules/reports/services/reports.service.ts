@@ -149,9 +149,15 @@ export class ReportsService {
 
     private async getStudentsByCourse(courseId: number) {
         return await this.db.registration.findMany({
-            where: { course_id: courseId },
+            where: { 
+                course_id: courseId,
+                status: 1,
+            },
             include: {
                 student: {
+                    where: {
+                        status: 1,
+                    },
                     include: {
                         person: {
                             select: {
@@ -196,7 +202,10 @@ export class ReportsService {
         console.log('Sample AttendanceRecord structure:', sampleRecord);
 
         const attendanceRecords = await this.db.attendance.findMany({
-            where: whereClause,
+            where: {
+                ...whereClause,
+                status: 1,
+            },
             include: {
                 course: true,
                 subject: true,

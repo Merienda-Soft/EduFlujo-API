@@ -4,14 +4,15 @@ import { CreateNotificationDto, UpdateNotificationStatusDto } from '../dtos/noti
 export class NotificationService {
     private db = Database.getInstance();
 
-    async createNotification(data: CreateNotificationDto) {
+    async createNotification(data: CreateNotificationDto, created_by?: number) {
         return await this.db.notifications.create({
             data: {
                 id_person_from: data.id_person_from,
                 id_person_to: data.id_person_to,
                 message: data.message,
                 created_date: new Date(),
-                status: 0
+                status: 0,
+                created_by: created_by || null,
             }
         });
     }
@@ -21,7 +22,7 @@ export class NotificationService {
             where: { id },
             data: {
                 status: data.status,
-                updated_at: new Date()
+                updated_at: new Date(),
             }
         });
     }
@@ -51,7 +52,10 @@ export class NotificationService {
         
         // First find the person by email
         const person = await this.db.person.findFirst({
-            where: { email }
+            where: { 
+                email,
+                status: 1,
+            }
         });
 
         console.log('Found person:', person);
@@ -62,7 +66,10 @@ export class NotificationService {
 
         // Check if the person is a tutor
         const tutor = await this.db.tutor.findUnique({
-            where: { id: person.id }
+            where: { 
+                id: person.id,
+                status: 1,
+            }
         });
 
         console.log('Tutor check result:', tutor ? 'Is tutor' : 'Not tutor');
@@ -73,7 +80,8 @@ export class NotificationService {
             // If it's a tutor, first get their students' IDs
             const tutorships = await this.db.tutorship.findMany({
                 where: {
-                    tutor_id: tutor.id
+                    tutor_id: tutor.id,
+                    status: 1,
                 },
                 select: {
                     student_id: true

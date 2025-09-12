@@ -80,7 +80,8 @@ export class EnvironmentService {
     courseCount: number;
     parallels: string[];
   }[],
-  subjectIds: number[]
+  subjectIds: number[],
+  created_by?: number
 ) {
   const db = Database.getInstance();
 
@@ -90,6 +91,7 @@ export class EnvironmentService {
       data: {
         ...managementData,
         status: managementData.status ?? 1,
+        created_by: created_by || null,
       },
     });
 
@@ -109,6 +111,8 @@ export class EnvironmentService {
             parallel: parallels[i],
             degree_id: grade,
             management_id: management.id,
+            status: 1,
+            created_by: created_by || null,
           },
         });
 
@@ -119,6 +123,8 @@ export class EnvironmentService {
               course_id: course.id,
               subject_id: subjectId,
               management_id: management.id,
+              status: 1,
+              created_by: created_by || null,
             },
           });
         }

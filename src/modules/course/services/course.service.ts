@@ -3,10 +3,16 @@ import Database from '../../../shared/database/connection';
 export class CourseService {
   async getAllCourses() {
     return await Database.getInstance().course.findMany({
+      where: {
+        status: 1,
+      },
       include: {
         degree: true,
         management: true,
         curriculums: {
+          where: {
+            status: 1,
+          },
           include: {
             subject: {
               select: {
@@ -22,12 +28,17 @@ export class CourseService {
 
   async getCourseById(id: number) {
     return await Database.getInstance().course.findUnique({
-
-      where: { id },
+      where: { 
+        id,
+        status: 1,
+      },
       include: {
         degree: true, 
         management: true, 
         curriculums: {
+          where: {
+            status: 1,
+          },
           include: {
             subject: true, 
           },
@@ -42,6 +53,7 @@ export class CourseService {
     degree_id: number;
     management_id: number;
     subject_ids: number[]; // IDs de las materias para las currículas
+    created_by?: number;
   }) {
     return await Database.getInstance().$transaction(async (transaction) => {
       // Crear el curso
@@ -51,6 +63,8 @@ export class CourseService {
           parallel: data.parallel,
           degree_id: data.degree_id,
           management_id: data.management_id,
+          status: 1,
+          created_by: data.created_by || null,
         },
       });
   
@@ -62,6 +76,8 @@ export class CourseService {
             course_id: course.id,
             subject_id: subjectId,
             management_id: data.management_id,
+            status: 1,
+            created_by: data.created_by || null,
           },
         });
         curriculums.push(curriculum);
@@ -83,6 +99,7 @@ export class CourseService {
       degree_id: number;
       management_id: number;
       subject_ids: number[]; // IDs de las materias para las currículas
+      updated_by?: number;
     }>
   ) {
     return await Database.getInstance().$transaction(async (transaction) => {
@@ -94,12 +111,18 @@ export class CourseService {
           parallel: data.parallel,
           degree_id: data.degree_id,
           management_id: data.management_id,
+          updated_by: data.updated_by || null,
         },
       });
   
       if (data.subject_ids) {
-        await transaction.curriculum.deleteMany({
+        // Primero, marcar como inactivas las currículas existentes
+        await transaction.curriculum.updateMany({
           where: { course_id: id },
+          data: { 
+            status: 0,
+            updated_by: data.updated_by || null,
+          },
         });
   
         const curriculums = [];
@@ -109,6 +132,8 @@ export class CourseService {
               course_id: id,
               subject_id: subjectId,
               management_id: data.management_id,
+              status: 1,
+              created_by: data.updated_by || null,
             },
           });
           curriculums.push(curriculum);
@@ -129,25 +154,34 @@ export class CourseService {
   }
 
 
-  async deactivatedCourse(id: number): Promise<void> {
+  async deactivatedCourse(id: number, updated_by?: number): Promise<void> {
     await Database.getInstance().course.update({
         where: { id: id },
-        data: { status: 0 } 
+        data: { 
+          status: 0,
+          updated_by: updated_by || null,
+        } 
       });
   }
 
 
-  async activatedCourse(id: number): Promise<void> {
+  async activatedCourse(id: number, updated_by?: number): Promise<void> {
     await Database.getInstance().course.update({
         where: { id: id },
-        data: { status: 1 } 
+        data: { 
+          status: 1,
+          updated_by: updated_by || null,
+        } 
       });
   }
 
 
   async getCoursesByDegree(degreeId: number) {
     return await Database.getInstance().course.findMany({
-      where: { degree_id: degreeId },
+      where: { 
+        degree_id: degreeId,
+        status: 1,
+      },
       include: {
         management: true, 
       },
@@ -156,9 +190,15 @@ export class CourseService {
 
   async getCourseWithCurriculum(courseId: number) {
     return await Database.getInstance().course.findUnique({
-      where: { id: courseId },
+      where: { 
+        id: courseId,
+        status: 1,
+      },
       include: {
         curriculums: {
+          where: {
+            status: 1,
+          },
           include: {
             subject: true,
           },

@@ -7,7 +7,15 @@ export class StudentService {
         try {
             const students = await this.db.registration.findMany({
                 where: {
-                    course_id: courseId
+                    course_id: courseId,
+                    status: 1, 
+                    deleted_at: null, 
+                    student: {
+                        status: 1,
+                        person: {
+                            status: 1 
+                        }
+                    }
                 },
                 include: {
                     student: {

@@ -56,12 +56,13 @@ export class TutorStudentController {
 
     async TutorshipRequest(req: Request, res: Response) {
         try {
-          const { tutorId, studentIds, relacion, value } = req.body;
+          const { tutorId, studentIds, relacion, created_by } = req.body;
     
           const result = await this.service.TutorshipRequest({
             tutorId: Number(tutorId),
             studentIds: studentIds.map((id: string) => Number(id)),
             relacion,
+            created_by,
           });
     
           res.status(200).json(result);
@@ -73,7 +74,12 @@ export class TutorStudentController {
     async createTutor(req: Request, res: Response) {
         try {
           const tutorData = req.body;
-          const tutor = await this.service.createTutor(tutorData);
+          const { created_by } = req.body;
+          
+          const tutor = await this.service.createTutor({
+            ...tutorData,
+            created_by,
+          });
           res.status(201).json(tutor);
         } catch (error) {
           this.handleError(res, error);
@@ -83,7 +89,12 @@ export class TutorStudentController {
     async createTutorship(req: Request, res: Response) {
         try {
           const tutorData = req.body;
-          const tutor = await this.service.createTutorWithTutorships(tutorData);
+          const { created_by } = req.body;
+          
+          const tutor = await this.service.createTutorWithTutorships({
+            ...tutorData,
+            created_by,
+          });
           res.status(201).json(tutor);
         } catch (error) {
           this.handleError(res, error);
@@ -102,8 +113,9 @@ export class TutorStudentController {
 
     async updateTutor(req: Request, res: Response) {
       try {
-        const { tutorId, status } = req.body;
-        const result = await this.service.updateTutorStatus(tutorId, status);
+        const { tutorId, status, updated_by } = req.body;
+        
+        const result = await this.service.updateTutorStatus(tutorId, status, updated_by);
         res.status(200).json(result);
       } catch (error) {
           this.handleError(res, error);

@@ -2,7 +2,11 @@ import Database from '../../../shared/database/connection';
 
 export class ManagementService {
   async getAllManagements() {
-    return await Database.getInstance().management.findMany();
+    return await Database.getInstance().management.findMany({
+      where: {
+        status: 1,
+      },
+    });
   }
 
   async getActiveManagements() {
@@ -13,27 +17,58 @@ export class ManagementService {
     });
   }
 
+  async getUserByEmail(email: string) {
+    const person = await Database.getInstance().person.findFirst({
+      where: { 
+        email: email,
+        status: 1,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!person) {
+      throw new Error('No se encontró un usuario con el email proporcionado.');
+    }
+
+    return { id: person.id };
+  }
+
   async getAllDegree() {
-    return await Database.getInstance().degree.findMany();
+    return await Database.getInstance().degree.findMany({
+      where: {
+        status: 1,
+      },
+    });
   }
 
   async getManagementById(id: number) {
     return await Database.getInstance().management.findUnique({
-      where: { id: id },
+      where: { 
+        id: id,
+        status: 1,
+      },
     });
   }
 
-  async updateManagement(id: number, data: any) {
+  async updateManagement(id: number, data: any, updated_by?: number) {
     return await Database.getInstance().management.update({
       where: { id: id },
-      data,
+      data: {
+        ...data,
+        updated_by: updated_by || null,
+      },
     });
   }
 
-  async deactivateManagement(id: number): Promise<void> {
+  async deactivateManagement(id: number, updated_by?: number): Promise<void> {
     await Database.getInstance().management.update({
       where: { id: id },
-      data: { status: 0 } 
+      data: { 
+        status: 0,
+        updated_by: updated_by || null,
+      } 
     });
   }
 
@@ -49,7 +84,8 @@ export class ManagementService {
       second_quarter_end: Date;
       third_quarter_start: Date;
       third_quarter_end: Date;
-    }
+    },
+    created_by?: number
   ) {
     const prisma = Database.getInstance();
   
@@ -70,7 +106,8 @@ export class ManagementService {
           second_quarter_start: quarterDates.second_quarter_start,
           second_quarter_end: quarterDates.second_quarter_end,
           third_quarter_start: quarterDates.third_quarter_start,
-          third_quarter_end: quarterDates.third_quarter_end
+          third_quarter_end: quarterDates.third_quarter_end,
+          created_by: created_by || null,
         }
       });
 

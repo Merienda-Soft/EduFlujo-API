@@ -9,12 +9,16 @@ export class TutorStudentService {
         try {
             if (role === 'student') {
                 const studentData = await this.db.student.findUnique({
-                    where: { id: userId },
+                    where: { 
+                        id: userId,
+                        status: 1,
+                    },
                     include: {
                         person: true,
                         registrations: {
                             where: {
-                                management_id: managementId
+                                management_id: managementId,
+                                status: 1,
                             },
                             include: {
                                 course: {
@@ -67,16 +71,23 @@ export class TutorStudentService {
 
             } else if (role === 'tutor') {
                 const tutorData = await this.db.tutor.findUnique({
-                    where: { id: userId },
+                    where: { 
+                        id: userId,
+                        status: 1,
+                    },
                     include: {
                         students: {
+                            where: {
+                                status: 1,
+                            },
                             include: {
                                 student: {
                                     include: {
                                         person: true,
                                         registrations: {
                                             where: {
-                                                management_id: managementId
+                                                management_id: managementId,
+                                                status: 1,
                                             },
                                             include: {
                                                 course: {
@@ -159,9 +170,10 @@ export class TutorStudentService {
         url_imageback: string;
         studentIds: number[];
         relacion: string;
+        created_by?: number;
       }) {
         return await this.db.$transaction(async (transaction) => {
-          const { studentIds, relacion, ...tutorData } = combinedData;
+          const { studentIds, relacion, created_by, ...tutorData } = combinedData;
       
           const countryName = tutorData.pais?.trim().toUpperCase() || 'NINGUNO';
           const departmentName = tutorData.departamento?.trim().toUpperCase() || 'NINGUNO';
@@ -231,7 +243,10 @@ export class TutorStudentService {
           }
       
           const existingPerson = await transaction.person.findFirst({
-            where: { email: tutorData.email },
+            where: { 
+              email: tutorData.email,
+              status: 1,
+            },
           });
       
           if (existingPerson) {
@@ -248,7 +263,8 @@ export class TutorStudentService {
               birth_date: tutorData.birth_date ? new Date(tutorData.birth_date) : null,
               email: tutorData.email,
               status: 1, 
-              town_id: town.id, 
+              town_id: town.id,
+              created_by: created_by || null,
             },
           });
       
@@ -258,6 +274,7 @@ export class TutorStudentService {
               status: 2, // 0: inactive, 1: active, 2: pending
               url_imagefront: tutorData.url_imagefront,
               url_imageback: tutorData.url_imageback,
+              created_by: created_by || null,
             },
           });
       
@@ -266,7 +283,10 @@ export class TutorStudentService {
           const createdTutorships = [];
           for (const studentId of studentIds) {
             const student = await transaction.student.findUnique({
-              where: { id: studentId },
+              where: { 
+                id: studentId,
+                status: 1,
+              },
               include: {
                 person: true,
               },
@@ -281,6 +301,8 @@ export class TutorStudentService {
                 tutor_id: tutor.id,
                 student_id: studentId,
                 relacion: relacion,
+                status: 1,
+                created_by: created_by || null,
               },
             });
       
@@ -319,9 +341,13 @@ export class TutorStudentService {
       }
       const student = await this.db.student.findFirst({
           where: {
+              status: 1,
               OR: [
                   { rude: rude || undefined },
-                  { person: { ci: ci || undefined } },
+                  { person: { 
+                      ci: ci || undefined,
+                      status: 1,
+                  } },
               ],
           },
           select: {
@@ -351,6 +377,7 @@ export class TutorStudentService {
         localidad: string;
         url_imagefront: string;
         url_imageback: string;
+        created_by?: number;
       }) {
         return await this.db.$transaction(async (transaction) => {
           const countryName = tutorData.pais?.trim().toUpperCase() || 'NINGUNO';
@@ -421,7 +448,10 @@ export class TutorStudentService {
           }
       
           const existingPerson = await transaction.person.findFirst({
-            where: { email: tutorData.email },
+            where: { 
+              email: tutorData.email,
+              status: 1,
+            },
           });
       
           if (existingPerson) {
@@ -438,7 +468,8 @@ export class TutorStudentService {
               birth_date: tutorData.birth_date ? new Date(tutorData.birth_date) : null,
               email: tutorData.email,
               status: 1, 
-              town_id: town.id, 
+              town_id: town.id,
+              created_by: tutorData.created_by || null,
             },
           });
  
@@ -448,6 +479,7 @@ export class TutorStudentService {
               status: 2, // 0: inactive, 1: active, 2: pending
               url_imagefront: tutorData.url_imagefront,
               url_imageback: tutorData.url_imageback,
+              created_by: tutorData.created_by || null,
             },
           });
           authService.createTutorUser(tutorData.email);
@@ -465,12 +497,16 @@ export class TutorStudentService {
       tutorId: number;
       studentIds: number[];
       relacion: string;
+      created_by?: number;
     }) {
         return await this.db.$transaction(async (transaction) => {
-            const { tutorId, studentIds, relacion } = requestData;
+            const { tutorId, studentIds, relacion, created_by } = requestData;
     
             const tutor = await transaction.tutor.findUnique({
-                where: { id: tutorId },
+                where: { 
+                    id: tutorId,
+                    status: { in: [1, 2] }, // active or pending
+                },
                 include: {
                     person: true,
                 },
@@ -483,7 +519,10 @@ export class TutorStudentService {
             const createdTutorships = [];
             for (const studentId of studentIds) {
                 const student = await transaction.student.findUnique({
-                    where: { id: studentId },
+                    where: { 
+                        id: studentId,
+                        status: 1,
+                    },
                     include: {
                         person: true,
                     },
@@ -498,6 +537,8 @@ export class TutorStudentService {
                         tutor_id: tutorId,
                         student_id: studentId,
                         relacion: relacion,
+                        status: 1,
+                        created_by: created_by || null,
                     },
                 });
     
@@ -525,18 +566,21 @@ export class TutorStudentService {
         });
     }
     
-    async updateTutorStatus(tutorId: number, status: 0 | 1 | 2) {
+    async updateTutorStatus(tutorId: number, status: 0 | 1 | 2, updated_by?: number) {
         const updatedTutor = await this.db.tutor.update({
             where: { id: tutorId },
-            data: { status }, // 0: inactive, 1: active, 2: pending
+            data: { 
+                status, // 0: inactive, 1: active, 2: pending
+                updated_by: updated_by || null,
+                updated_at: new Date(),
+            },
         });
-    
+
         return {
             message: 'Estado del tutor actualizado exitosamente.',
             tutor: updatedTutor,
         };
-    }
-
+    }    
     async getTutorsByStatus(value: number) {
         return await this.db.tutor.findMany({
           where: {
@@ -575,8 +619,10 @@ export class TutorStudentService {
     async getTutorByEmail(email: string) {
       const tutor = await this.db.tutor.findFirst({
           where: {
+              status: 1, // only active tutors
               person: {
                   email: email,
+                  status: 1, // only active persons
               },
           },
           include: {
@@ -606,8 +652,10 @@ export class TutorStudentService {
     async getStudentByEmail(email: string) {
       const student = await this.db.student.findFirst({
           where: {
+              status: 1, // only active students
               person: {
                   email: email,
+                  status: 1, // only active persons
               },
           },
           include: {
@@ -637,10 +685,15 @@ export class TutorStudentService {
     async getStudentsByCourseId(courseId: number) {
     const students = await this.db.student.findMany({
         where: {
+            status: 1, // only active students
             registrations: {
                 some: {
                     course_id: courseId,
+                    status: 1, // only active registrations
                 },
+            },
+            person: {
+                status: 1, // only active persons
             },
         },
         include: {

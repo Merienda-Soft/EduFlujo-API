@@ -16,7 +16,9 @@ export class AttendanceController {
     async registerAttendance(req: Request, res: Response) {
         try {
             const data = registerAttendanceSchema.parse(req.body);
-            const result = await this.service.registerAttendance(data);
+            const created_by = req.body.created_by; // ID del usuario que crea
+            
+            const result = await this.service.registerAttendance(data, created_by);
             
             return res.status(201).json({
                 ok: true,
@@ -127,6 +129,7 @@ export class AttendanceController {
         try {
             const { attendanceId, studentId } = req.params;
             const data = updateAttendanceRecordSchema.parse(req.body);
+            const updated_by = req.body.updated_by; // ID del usuario que actualiza
             
             if (!attendanceId || !studentId) {
                 return res.status(400).json({
@@ -138,7 +141,8 @@ export class AttendanceController {
             const result = await this.service.updateAttendanceRecord(
                 Number(attendanceId), 
                 Number(studentId), 
-                data
+                data,
+                updated_by
             );
             
             return res.status(200).json({
@@ -196,8 +200,9 @@ export class AttendanceController {
     async updateMultipleAttendanceRecords(req: Request, res: Response) {
         try {
             const data = updateMultipleAttendanceRecordsSchema.parse(req.body);
+            const updated_by = req.body.updated_by; // ID del usuario que actualiza
             
-            const result = await this.service.updateMultipleAttendanceRecords(data);
+            const result = await this.service.updateMultipleAttendanceRecords(data, updated_by);
             
             return res.status(200).json({
                 ok: true,

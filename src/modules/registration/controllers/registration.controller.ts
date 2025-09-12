@@ -6,8 +6,12 @@ export class RegistrationController {
 
   async registerStudents(req: Request, res: Response) {
     try {
-      const { dataAssignment, registrationData } = req.body;
-      const result = await this.registrationService.registerStudents(dataAssignment, registrationData);
+      const { dataAssignment, registrationData, created_by } = req.body;
+      
+      const result = await this.registrationService.registerStudents(dataAssignment, {
+        ...registrationData,
+        created_by,
+      });
 
       res.status(201).json(result);
 
@@ -18,10 +22,16 @@ export class RegistrationController {
 
   async updateStudent(req: Request, res: Response) {
     try {
-      const { registrationUpdates } = req.body;
+      const { registrationUpdates, updated_by } = req.body;
       console.log('RegistrationUpdates Controller', registrationUpdates);
 
-      const result = await this.registrationService.updateStudent(registrationUpdates);
+      // Agregar updated_by a cada update
+      const updatesWithAudit = registrationUpdates.map((update: any) => ({
+        ...update,
+        updated_by,
+      }));
+
+      const result = await this.registrationService.updateStudent(updatesWithAudit);
 
       res.status(200).json(result);
     } catch (error) {

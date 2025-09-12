@@ -3,7 +3,7 @@ import { StudentService } from '../services/student.service';
 
 export class StudentController {
     private service = new StudentService();
-
+    
     async getStudentsByCourse(req: Request, res: Response) {
         try {
             const { courseId } = req.params;
