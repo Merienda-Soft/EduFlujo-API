@@ -110,7 +110,7 @@ export class TasksService {
         }
     }
 
-    async createTask(data: CreateTaskWithAssignmentsDto) {
+    async createTask(data: CreateTaskWithAssignmentsDto, created_by?: number) {
         return await this.db.$transaction(async (tx) => {
             const task = await tx.task.create({
                 data: {
@@ -127,7 +127,8 @@ export class TasksService {
                     type: data.task.type,
                     start_date: data.task.start_date,
                     end_date: data.task.end_date,
-                    status: 1
+                    status: 1,
+                    created_by: created_by || null,
                 }
             });
 
@@ -135,17 +136,21 @@ export class TasksService {
                 data: {
                     type: data.tool.type,
                     methodology: data.tool.methodology,
-                    task_id: task.id
+                    task_id: task.id,
+                    status: 1,
+                    created_by: created_by || null,
                 }
             })
 
-            // Obtener estudiantes del curso
+            // Obtener estudiantes del curso (solo activos)
             const students = await tx.student.findMany({
                 where: {
+                    status: 1,
                     registrations: {
                         some: {
                             course_id: data.task.course_id,
-                            management_id: data.task.management_id
+                            management_id: data.task.management_id,
+                            status: 1,
                         }
                     }
                 },
@@ -161,6 +166,7 @@ export class TasksService {
                         task_id: task.id,
                         student_id: student.id,
                         status: 0,
+                        created_by: created_by || null,
                         evaluation_methodology: structuredClone(evaluation_tool.methodology), //evaluation methodology & tool schema
                         type: evaluation_tool.type
                     }
@@ -241,7 +247,7 @@ export class TasksService {
             type: string;
             methodology: any;
         };
-        }) {
+        }, updated_by?: number) {
         return await this.db.$transaction(async (tx) => {
             // 1. Actualizar la tarea principal
             const updatedTask = await tx.task.update({
@@ -259,7 +265,8 @@ export class TasksService {
                     quarter: data.task.quarter,
                     start_date: data.task.start_date,
                     end_date: data.task.end_date,
-                    last_update: new Date()
+                    updated_at: new Date(),
+                    updated_by: updated_by || null
                 },
                 include: {
                     assignments: true
@@ -289,13 +296,14 @@ export class TasksService {
         });
     }
 
-    async deleteTask(id: number) {
+    async deleteTask(id: number, deleted_by?: number) {
         return await this.db.task.update({
             where: { id },
             data: {
                 status: 0,
                 deleted_at: new Date(),
-                last_update: new Date()
+                updated_at: new Date(),
+                deleted_by: deleted_by || null
             }
         });
     }

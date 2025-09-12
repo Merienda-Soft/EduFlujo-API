@@ -10,7 +10,9 @@ export class TasksController {
     async create(req: Request, res: Response) {
         try {
             const data = createTaskWithAssignmentsSchema.parse(req.body);
-            const result = await this.service.createTask(data);
+            const { created_by } = req.body;
+            
+            const result = await this.service.createTask(data, created_by);
             res.status(201).json(result);
         } catch (error) {
             if (error instanceof ZodError) {
@@ -43,7 +45,8 @@ export class TasksController {
     async update(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            const result = await this.service.updateTask(Number(id), req.body);
+            const { updated_by } = req.body;
+            const result = await this.service.updateTask(Number(id), req.body, updated_by);
             res.status(200).json({ result, "ok": true });
         } catch (error) {
             this.handleError(res, error);
@@ -53,7 +56,8 @@ export class TasksController {
     async delete(req: Request, res: Response) {
         try {
             const { id } = req.params;
-            await this.service.deleteTask(Number(id));
+            const { deleted_by } = req.body;
+            await this.service.deleteTask(Number(id), deleted_by);
             res.status(200).json({ message: 'Tarea eliminada exitosamente', "ok": true });
         } catch (error) {
             this.handleError(res, error);
