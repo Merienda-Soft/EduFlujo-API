@@ -112,6 +112,15 @@ export class TasksService {
 
     async createTask(data: CreateTaskWithAssignmentsDto, created_by?: number) {
         return await this.db.$transaction(async (tx) => {
+            // Obtener información de la materia y curso para las notificaciones
+            const subject = await tx.subject.findUnique({
+                where: { id: data.task.subject_id }
+            });
+
+            const course = await tx.course.findUnique({
+                where: { id: data.task.course_id }
+            });
+
             const task = await tx.task.create({
                 data: {
                     name: data.task.name,
@@ -178,7 +187,7 @@ export class TasksService {
                     data: {
                         id_person_from: data.task.professor_id,
                         id_person_to: student.person.id,
-                        message: `Nueva tarea: "${data.task.name}" en la materia ${data.task.subject_id} del curso ${data.task.course_id}. Fecha de entrega: ${new Date(data.task.end_date).toLocaleDateString()}`
+                        message: `Nueva tarea: "${data.task.name}" en la materia ${subject?.subject} del curso ${course?.course}. Fecha de entrega: ${new Date(data.task.end_date).toLocaleDateString()}`
                     }
                 })
             );
