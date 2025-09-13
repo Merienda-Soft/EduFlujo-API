@@ -241,57 +241,66 @@ export class TasksService {
         });
     }
 
-    async updateTask(id: number, data: {
-        task: any;
-        tool?: {
-            type: string;
-            methodology: any;
-        };
-        }, updated_by?: number) {
+    async updateTask(id: number, data: any, updated_by?: number) {
         return await this.db.$transaction(async (tx) => {
-            // 1. Actualizar la tarea principal
+            const taskData = data.task?.task || data.task || {};
+            const toolData = data.tool;
+            const updatedByParam = updated_by || data.updated_by || data.task?.updated_by;
+
+            console.log('Datos recibidos en updateTask:', JSON.stringify(data, null, 2));
+            console.log('Task data extraído:', JSON.stringify(taskData, null, 2));
+            console.log('Tool data extraído:', JSON.stringify(toolData, null, 2));
+            console.log('Updated by:', updatedByParam);
+
             const updatedTask = await tx.task.update({
                 where: { id },
                 data: {
-                    name: data.task.name,
-                    description: data.task.description,
-                    dimension_id: data.task.dimension_id,
-                    management_id: data.task.management_id,
-                    professor_id: data.task.professor_id,
-                    subject_id: data.task.subject_id,
-                    course_id: data.task.course_id,
-                    weight: data.task.weight,
-                    is_autoevaluation: data.task.is_autoevaluation,
-                    quarter: data.task.quarter,
-                    start_date: data.task.start_date,
-                    end_date: data.task.end_date,
+                    name: taskData.name,
+                    description: taskData.description,
+                    dimension_id: taskData.dimension_id,
+                    management_id: taskData.management_id,
+                    professor_id: taskData.professor_id,
+                    subject_id: taskData.subject_id,
+                    course_id: taskData.course_id,
+                    weight: taskData.weight,
+                    is_autoevaluation: taskData.is_autoevaluation,
+                    quarter: taskData.quarter,
+                    start_date: taskData.start_date,
+                    end_date: taskData.end_date,
                     updated_at: new Date(),
-                    updated_by: updated_by || null
+                    updated_by: updatedByParam || null
                 },
                 include: {
                     assignments: true
                 }
             });
 
-            // 2. Actualizar herramienta de evaluación (si existe)
-            if (data.tool) {
-            await tx.evaluationTools.updateMany({
-                where: { task_id: id },
-                data: {
-                type: Number(data.tool.type),
-                methodology: data.tool.methodology
-                }
-            });
+            // 2. Actualizar herramienta de evaluación
+            if (toolData) {
+                console.log('Actualizando herramienta de evaluación...');
+                await tx.evaluationTools.updateMany({
+                    where: { task_id: id },
+                    data: {
+                        type: Number(toolData.type),
+                        methodology: toolData.methodology,
+                        updated_at: new Date(),
+                        updated_by: updatedByParam || null
+                    }
+                });
 
-            // 3. Actualizar metodología en asignaciones
-            await tx.taskAssignment.updateMany({
-                where: { task_id: id },
-                data: {
-                evaluation_methodology: data.tool.methodology
-                }
-            });
+                // 3. Actualizar metodología en asignaciones
+                console.log('Actualizando metodología en asignaciones...');
+                await tx.taskAssignment.updateMany({
+                    where: { task_id: id },
+                    data: {
+                        evaluation_methodology: toolData.methodology,
+                        updated_at: new Date(),
+                        updated_by: updatedByParam || null
+                    }
+                });
             }
 
+            console.log('Task actualizada exitosamente:', updatedTask.id);
             return updatedTask;
         });
     }

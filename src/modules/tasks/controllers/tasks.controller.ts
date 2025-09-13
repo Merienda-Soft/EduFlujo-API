@@ -43,12 +43,16 @@ export class TasksController {
     }
 
     async update(req: Request, res: Response) {
+        console.log('Request Body:', JSON.stringify(req.body, null, 2)); // Log del cuerpo de la solicitud
         try {
             const { id } = req.params;
-            const { updated_by } = req.body;
+            const updated_by = req.body.updated_by || req.body.task?.updated_by;
+            console.log('Updated by extraído:', updated_by);
+            
             const result = await this.service.updateTask(Number(id), req.body, updated_by);
             res.status(200).json({ result, "ok": true });
         } catch (error) {
+            console.error('Error en update task controller:', error);
             this.handleError(res, error);
         }
     }
