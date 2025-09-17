@@ -22,6 +22,9 @@ export const tasksRouter = (() => {
     router.get('/professor/:professorId/course/:courseId/subject/:subjectId/management/:managementId', tController.getTasksByProfessorCourseSubjectManagement.bind(tController));
     router.get('/course/:courseId/professor/:professorId/management/:managementId', tController.getTasksByCourseAndProfessor.bind(tController));
 
+    // Obtener peso de tareas por fecha y dimensión
+    router.get('/weight/professor/:professorId/course/:courseId/subject/:subjectId/management/:managementId', tController.getWeightByDate.bind(tController));
+
     // Subir archivos de tarea
     router.post('/submit', tController.submitTaskFiles.bind(tController));
 

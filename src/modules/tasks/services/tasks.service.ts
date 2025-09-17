@@ -1082,4 +1082,182 @@ export class TasksService {
             where: { id }
         });
     }
+
+    async getWeightMonthByDate(date: Date, professorId: number, courseId: number, subjectId: number, managementId: number) {
+        try {
+            // Obtener la información del management para las fechas de los trimestres
+            const management = await this.db.management.findUnique({
+                where: { id: managementId }
+            });
+
+            if (!management) {
+                throw new Error('No se encontró la gestión especificada');
+            }
+
+            // Determinar en qué quarter está la fecha
+            const quarter = this.getTaskQuarter(date, management);
+            if (!quarter) {
+                return { weight: 0, quarter: null, dateRange: null, weightByDimension: {} };
+            }
+
+            // Obtener el mes de la fecha
+            const month = date.getMonth() + 1; // getMonth() devuelve 0-11
+            const year = date.getFullYear();
+
+            // Resultado final
+            const result = {
+                quarter: quarter,
+                weightByDimension: {} as { [key: number]: { 
+                    weight: number, 
+                    // tasks: any[], 
+                    dateRange: any } },
+                totalWeight: 0,
+                tasksFound: 0
+            };
+
+            // 1. Buscar tareas para SABER (2) y HACER (3) - por mes
+            let monthStartDate: Date;
+            let monthEndDate: Date;
+
+            switch (month) {
+                case 2: // Febrero
+                    monthStartDate = new Date(year, 1, 1); // 01 de febrero
+                    monthEndDate = new Date(year, 1, 28); // 28 de febrero
+                    break;
+                case 3: // Marzo
+                    monthStartDate = new Date(year, 2, 1); // 01 de marzo
+                    monthEndDate = new Date(year, 2, 31); // 31 de marzo
+                    break;
+                case 4: // Abril - puede pertenecer al Q1
+                case 5: // Mayo - puede pertenecer al Q1 o Q2
+                    if (quarter === 1) {
+                        // Si está en Q1, abarca desde abril hasta el fin del Q1
+                        monthStartDate = new Date(year, 3, 1); // 01 de abril
+                        monthEndDate = new Date(management.first_quarter_end);
+                    } else if (quarter === 2) {
+                        // Si está en Q2, abarca desde el inicio del Q2 hasta mayo
+                        monthStartDate = new Date(management.second_quarter_start);
+                        monthEndDate = new Date(year, 4, 31); // 31 de mayo
+                    }
+                    break;
+                case 6: // Junio - siempre junto con julio
+                case 7: // Julio - siempre junto con junio
+                    monthStartDate = new Date(year, 5, 1); // 01 de junio
+                    monthEndDate = new Date(year, 6, 31); // 31 de julio
+                    break;
+                case 8: // Agosto
+                    monthStartDate = new Date(year, 7, 1); // 01 de agosto
+                    monthEndDate = new Date(management.second_quarter_end);
+                    break;
+                case 9: // Septiembre
+                    monthStartDate = new Date(management.third_quarter_start);
+                    monthEndDate = new Date(year, 8, 30); // 30 de septiembre
+                    break;
+                case 10: // Octubre
+                    monthStartDate = new Date(year, 9, 1); // 01 de octubre
+                    monthEndDate = new Date(year, 9, 31); // 31 de octubre
+                    break;
+                case 11: // Noviembre - siempre junto con diciembre
+                case 12: // Diciembre - siempre junto con noviembre
+                    monthStartDate = new Date(year, 10, 1); // 01 de noviembre
+                    monthEndDate = new Date(management.third_quarter_end);
+                    break;
+                default:
+                    throw new Error(`Mes no válido: ${month}`);
+            }
+
+            // Buscar tareas SABER (2) y HACER (3) por mes
+            const monthlyTasks = await this.db.task.findMany({
+                where: {
+                    status: 1,
+                    professor_id: professorId,
+                    course_id: courseId,
+                    subject_id: subjectId,
+                    management_id: managementId,
+                    dimension_id: { in: [2, 3] }, // SABER y HACER
+                    end_date: {
+                        gte: monthStartDate,
+                        lte: monthEndDate
+                    }
+                },
+                include: {
+                    dimension: true
+                }
+            });
+
+            // 2. Buscar tareas para SER (1), DECIDIR (4) y AUTOEVALUACIÓN (5) - por quarter
+            let quarterStartDate: Date;
+            let quarterEndDate: Date;
+
+            switch (quarter) {
+                case 1:
+                    quarterStartDate = new Date(management.first_quarter_start);
+                    quarterEndDate = new Date(management.first_quarter_end);
+                    break;
+                case 2:
+                    quarterStartDate = new Date(management.second_quarter_start);
+                    quarterEndDate = new Date(management.second_quarter_end);
+                    break;
+                case 3:
+                    quarterStartDate = new Date(management.third_quarter_start);
+                    quarterEndDate = new Date(management.third_quarter_end);
+                    break;
+            }
+
+            // Buscar tareas SER (1), DECIDIR (4) y AUTOEVALUACIÓN (5) por quarter
+            const quarterlyTasks = await this.db.task.findMany({
+                where: {
+                    status: 1,
+                    professor_id: professorId,
+                    course_id: courseId,
+                    subject_id: subjectId,
+                    management_id: managementId,
+                    dimension_id: { in: [1, 4, 5] }, // SER, DECIDIR y AUTOEVALUACIÓN
+                    end_date: {
+                        gte: quarterStartDate,
+                        lte: quarterEndDate
+                    }
+                },
+                include: {
+                    dimension: true
+                }
+            });
+
+            // 3. Procesar todas las tareas y agrupar por dimensión
+            const allTasks = [...monthlyTasks, ...quarterlyTasks];
+
+            allTasks.forEach(task => {
+                const dimId = task.dimension_id;
+                const taskWeight = task.weight || 0;
+                
+                if (!result.weightByDimension[dimId]) {
+                    result.weightByDimension[dimId] = {
+                        weight: 0,
+                        // tasks: [],
+                        dateRange: dimId === 2 || dimId === 3 ? 
+                            { start: monthStartDate, end: monthEndDate } : 
+                            { start: quarterStartDate, end: quarterEndDate }
+                    };
+                }
+                
+                result.weightByDimension[dimId].weight += taskWeight;
+                // result.weightByDimension[dimId].tasks.push({
+                //     id: task.id,
+                //     name: task.name,
+                //     weight: task.weight,
+                //     start_date: task.start_date,
+                //     dimension: task.dimension.dimension
+                // });
+                
+                result.totalWeight += taskWeight;
+                result.tasksFound++;
+            });
+
+            return result;
+
+        } catch (error) {
+            console.error('Error en getWeightMonthByDate:', error);
+            throw new Error(`Error al calcular el peso por mes: ${error.message}`);
+        }
+    }
 }

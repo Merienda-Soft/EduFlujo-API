@@ -291,6 +291,45 @@ export class TasksController {
         }
     }
 
+    async getWeightByDate(req: Request, res: Response) {
+        try {
+            const { professorId, courseId, subjectId, managementId } = req.params;
+            const { date } = req.query;
+
+            // Validar parámetros requeridos
+            if (!professorId || !courseId || !subjectId || !managementId || !date) {
+                return res.status(400).json({
+                    ok: false,
+                    error: 'Se requieren todos los parámetros: professorId, courseId, subjectId, managementId y date'
+                });
+            }
+
+            // Validar y convertir la fecha
+            const requestDate = new Date(date as string);
+            if (isNaN(requestDate.getTime())) {
+                return res.status(400).json({
+                    ok: false,
+                    error: 'La fecha proporcionada no es válida. Use formato YYYY-MM-DD'
+                });
+            }
+
+            const result = await this.service.getWeightMonthByDate(
+                requestDate,
+                Number(professorId),
+                Number(courseId),
+                Number(subjectId),
+                Number(managementId)
+            );
+
+            res.status(200).json({
+                ok: true,
+                data: result
+            });
+        } catch (error) {
+            this.handleError(res, error);
+        }
+    }
+
     private handleError(res: Response, error: any) {
         console.error(error);
         res.status(500).json({ error: 'Error interno del servidor', "ok": false });
