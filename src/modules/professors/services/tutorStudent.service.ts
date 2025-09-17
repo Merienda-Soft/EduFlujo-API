@@ -168,12 +168,14 @@ export class TutorStudentService {
         localidad: string;
         url_imagefront: string;
         url_imageback: string;
-        studentIds: number[];
-        relacion: string;
+        tutorshipData: Array<{
+            studentId: number;
+            relacion: string;
+        }>;
         created_by?: number;
       }) {
         return await this.db.$transaction(async (transaction) => {
-          const { studentIds, relacion, created_by, ...tutorData } = combinedData;
+          const { tutorshipData, created_by, ...tutorData } = combinedData;
       
           const countryName = tutorData.pais?.trim().toUpperCase() || 'NINGUNO';
           const departmentName = tutorData.departamento?.trim().toUpperCase() || 'NINGUNO';
@@ -281,7 +283,9 @@ export class TutorStudentService {
           authService.createTutorUser(tutorData.email);
       
           const createdTutorships = [];
-          for (const studentId of studentIds) {
+          for (const tutorshipItem of tutorshipData) {
+            const { studentId, relacion } = tutorshipItem;
+            
             const student = await transaction.student.findUnique({
               where: { 
                 id: studentId,
