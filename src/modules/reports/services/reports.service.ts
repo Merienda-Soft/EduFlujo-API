@@ -1093,14 +1093,14 @@ export class ReportsService {
    * 
    * Sistema de ponderación:
    * - SER (5 pts): Se calcula por trimestre completo usando todas las tareas del trimestre
-   * - SABER (40 pts): Se calcula por meses dentro del trimestre, promediando los 3 meses  
-   * - HACER (45 pts): Se calcula por meses dentro del trimestre, promediando los 3 meses
+   * - SABER (45 pts): Se calcula por meses dentro del trimestre, promediando los 3 meses  
+   * - HACER (40 pts): Se calcula por meses dentro del trimestre, promediando los 3 meses
    * - DECIDIR (5 pts): Se calcula por trimestre completo usando todas las tareas del trimestre
    * - AUTOEVALUACIÓN (5 pts): Se calcula por trimestre completo usando todas las tareas del trimestre
    * 
    * Cada tarea tiene un weight (porcentaje) que determina su importancia dentro de la dimensión.
-   * Por ejemplo: Si SABER vale 40 pts y una tarea tiene weight=50%, entonces esa tarea vale 
-   * el 50% de los 40 pts. Si el estudiante saca 100 en la tarea, obtiene 20 pts (50% de 40).
+   * Por ejemplo: Si SABER vale 45 pts y una tarea tiene weight=50%, entonces esa tarea vale 
+   * el 50% de los 45 pts. Si el estudiante saca 100 en la tarea, obtiene 22.5 pts (50% de 45).
    * 
    * Para SABER y HACER, se calcula mes por mes y luego se promedian los 3 meses del trimestre.
    */
@@ -1118,8 +1118,8 @@ export class ReportsService {
     // Configuración de puntajes por dimensión
     const dimensionScores = {
       1: 5,   // SER
-      2: 40,  // SABER
-      3: 45,  // HACER
+      2: 45,  // SABER
+      3: 40,  // HACER
       4: 5,   // DECIDIR
       5: 5    // AUTOEVALUACIÓN
     };
@@ -1302,7 +1302,7 @@ export class ReportsService {
           if (monthTotalWeight > 0) {
             // El puntaje del mes es el promedio ponderado de las tareas del mes
             const monthPercentage = (monthWeightedScore / monthTotalWeight) * 100;
-            const dimensionMaxScore = dimensionName === 'saber' ? 40 : 45;
+            const dimensionMaxScore = dimensionName === 'saber' ? 45 : 40;
             const monthPoints = (monthPercentage * dimensionMaxScore) / 100;
             
             grades.details[dimensionName].totalScore += monthPoints;
@@ -1362,8 +1362,8 @@ export class ReportsService {
   private getDimensionScores() {
     return {
       1: 5,   // SER
-      2: 40,  // SABER
-      3: 45,  // HACER
+      2: 45,  // SABER
+      3: 40,  // HACER
       4: 5,   // DECIDIR
       5: 5    // AUTOEVALUACIÓN
     };
