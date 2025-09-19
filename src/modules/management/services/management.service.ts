@@ -2,11 +2,7 @@ import Database from '../../../shared/database/connection';
 
 export class ManagementService {
   async getAllManagements() {
-    return await Database.getInstance().management.findMany({
-      where: {
-        status: 1,
-      },
-    });
+    return await Database.getInstance().management.findMany();
   }
 
   async getActiveManagements() {
