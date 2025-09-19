@@ -1088,6 +1088,22 @@ export class ReportsService {
     return studentGrades;
   }
 
+  /**
+   * Cálculo de notas por trimestre con ponderación de tareas
+   * 
+   * Sistema de ponderación:
+   * - SER (5 pts): Se calcula por trimestre completo usando todas las tareas del trimestre
+   * - SABER (40 pts): Se calcula por meses dentro del trimestre, promediando los 3 meses  
+   * - HACER (45 pts): Se calcula por meses dentro del trimestre, promediando los 3 meses
+   * - DECIDIR (5 pts): Se calcula por trimestre completo usando todas las tareas del trimestre
+   * - AUTOEVALUACIÓN (5 pts): Se calcula por trimestre completo usando todas las tareas del trimestre
+   * 
+   * Cada tarea tiene un weight (porcentaje) que determina su importancia dentro de la dimensión.
+   * Por ejemplo: Si SABER vale 40 pts y una tarea tiene weight=50%, entonces esa tarea vale 
+   * el 50% de los 40 pts. Si el estudiante saca 100 en la tarea, obtiene 20 pts (50% de 40).
+   * 
+   * Para SABER y HACER, se calcula mes por mes y luego se promedian los 3 meses del trimestre.
+   */
   private async calculateTrimesterGrades(
     studentId: number,
     subjectId: number,
@@ -1099,6 +1115,15 @@ export class ReportsService {
       `Calculando trimestre ${quarter} para estudiante ${studentId}, materia ${subjectId}`
     );
 
+    // Configuración de puntajes por dimensión
+    const dimensionScores = {
+      1: 5,   // SER
+      2: 40,  // SABER
+      3: 45,  // HACER
+      4: 5,   // DECIDIR
+      5: 5    // AUTOEVALUACIÓN
+    };
+
     const grades = {
       saber: 0,
       hacer: 0,
@@ -1107,21 +1132,53 @@ export class ReportsService {
       autoevaluacion: 0,
       total: 0,
       details: {
-        saber: { tasks: [], average: 0, count: 0 },
-        hacer: { tasks: [], average: 0, count: 0 },
-        ser: { tasks: [], average: 0, count: 0 },
-        decidir: { tasks: [], average: 0, count: 0 },
-        autoevaluacion: { tasks: [], average: 0, count: 0 },
+        saber: { tasks: [], totalWeight: 0, totalScore: 0, finalScore: 0 },
+        hacer: { tasks: [], totalWeight: 0, totalScore: 0, finalScore: 0 },
+        ser: { tasks: [], totalWeight: 0, totalScore: 0, finalScore: 0 },
+        decidir: { tasks: [], totalWeight: 0, totalScore: 0, finalScore: 0 },
+        autoevaluacion: { tasks: [], totalWeight: 0, totalScore: 0, finalScore: 0 },
       },
     };
 
-    // Obtener todas las tareas del trimestre
-    const tasks = await this.db.task.findMany({
+    // Obtener información del management para las fechas
+    const management = await this.db.management.findUnique({
+      where: { id: managementId }
+    });
+
+    if (!management) {
+      throw new Error('Management no encontrado');
+    }
+
+    // Determinar fechas del trimestre
+    let quarterStart: Date, quarterEnd: Date;
+    switch (quarter) {
+      case 'Q1':
+        quarterStart = new Date(management.first_quarter_start);
+        quarterEnd = new Date(management.first_quarter_end);
+        break;
+      case 'Q2':
+        quarterStart = new Date(management.second_quarter_start);
+        quarterEnd = new Date(management.second_quarter_end);
+        break;
+      case 'Q3':
+        quarterStart = new Date(management.third_quarter_start);
+        quarterEnd = new Date(management.third_quarter_end);
+        break;
+      default:
+        throw new Error(`Quarter inválido: ${quarter}`);
+    }
+
+    // 1. Calcular SER, DECIDIR y AUTOEVALUACIÓN por trimestre completo
+    const quarterlyTasks = await this.db.task.findMany({
       where: {
         subject_id: subjectId,
         management_id: managementId,
-        quarter: quarter,
-        status: 1, // Tareas activas
+        status: 1,
+        dimension_id: { in: [1, 4, 5] }, // SER, DECIDIR, AUTOEVALUACIÓN
+        end_date: {
+          gte: quarterStart,
+          lte: quarterEnd
+        }
       },
       include: {
         assignments: {
@@ -1133,93 +1190,153 @@ export class ReportsService {
       },
     });
 
-    console.log(
-      `Encontradas ${tasks.length} tareas para el trimestre ${quarter}`
-    );
+    // Procesar tareas por trimestre (SER, DECIDIR, AUTOEVALUACIÓN)
+    quarterlyTasks.forEach(task => {
+      const assignment = task.assignments[0];
+      if (assignment && assignment.qualification) {
+        const taskScore = parseFloat(assignment.qualification);
+        const taskWeight = task.weight || 0;
+        const dimensionId = task.dimension_id;
+        
+        let dimensionName = '';
+        switch (dimensionId) {
+          case 1: dimensionName = 'ser'; break;
+          case 4: dimensionName = 'decidir'; break;
+          case 5: dimensionName = 'autoevaluacion'; break;
+        }
 
-    // Agrupar tareas por dimensión
-    const tasksByDimension = {
-      saber: tasks.filter((t) =>
-        t.dimension.dimension?.toLowerCase().includes("saber")
-      ),
-      hacer: tasks.filter((t) =>
-        t.dimension.dimension?.toLowerCase().includes("hacer")
-      ),
-      ser: tasks.filter((t) =>
-        t.dimension.dimension?.toLowerCase().includes("ser")
-      ),
-      decidir: tasks.filter((t) =>
-        t.dimension.dimension?.toLowerCase().includes("decidir")
-      ),
-    };
+        if (dimensionName) {
+          grades.details[dimensionName].tasks.push({
+            taskName: task.name,
+            score: taskScore,
+            weight: taskWeight
+          });
+          grades.details[dimensionName].totalWeight += taskWeight;
+          grades.details[dimensionName].totalScore += (taskScore * taskWeight) / 100;
+        }
+      }
+    });
 
-    // Separar autoevaluaciones
-    const autoevaluaciones = tasks.filter((t) => t.is_autoevaluation === 1);
+    // 2. Calcular SABER y HACER por meses
+    const year = quarterStart.getFullYear();
+    let monthRanges = [];
 
-    // Calcular promedio por dimensión
-    for (const [dimensionName, dimensionTasks] of Object.entries(
-      tasksByDimension
-    )) {
-      if (dimensionTasks.length > 0) {
-        const taskGrades = [];
-        const totalScore = dimensionTasks.reduce((sum, task) => {
-          const assignment = task.assignments[0];
-          if (assignment && assignment.qualification) {
-            const score = parseFloat(assignment.qualification);
-            taskGrades.push({
-              taskName: task.name,
-              score: score,
-            });
-            return sum + score;
+    switch (quarter) {
+      case 'Q1':
+        monthRanges = [
+          { start: quarterStart, end: new Date(year, 1, 28) }, // hasta 28 feb
+          { start: new Date(year, 2, 1), end: new Date(year, 2, 31) }, // marzo completo
+          { start: new Date(year, 3, 1), end: quarterEnd } // abril hasta fin Q1
+        ];
+        break;
+      case 'Q2':
+        monthRanges = [
+          { start: quarterStart, end: new Date(year, 4, 31) }, // mayo completo
+          { start: new Date(year, 5, 1), end: new Date(year, 6, 31) }, // jun-jul
+          { start: new Date(year, 7, 1), end: quarterEnd } // agosto hasta fin Q2
+        ];
+        break;
+      case 'Q3':
+        monthRanges = [
+          { start: quarterStart, end: new Date(year, 8, 30) }, // septiembre
+          { start: new Date(year, 9, 1), end: new Date(year, 9, 31) }, // octubre
+          { start: new Date(year, 10, 1), end: quarterEnd } // nov-dic hasta fin Q3
+        ];
+        break;
+    }
+
+    // Calcular SABER y HACER por cada mes
+    for (const monthRange of monthRanges) {
+      const monthlyTasks = await this.db.task.findMany({
+        where: {
+          subject_id: subjectId,
+          management_id: managementId,
+          status: 1,
+          dimension_id: { in: [2, 3] }, // SABER y HACER
+          end_date: {
+            gte: monthRange.start,
+            lte: monthRange.end
           }
-          return sum;
-        }, 0);
+        },
+        include: {
+          assignments: {
+            where: {
+              student_id: studentId,
+            },
+          },
+          dimension: true,
+        },
+      });
 
-        const averageScore = totalScore / dimensionTasks.length;
-        grades.details[dimensionName].tasks = taskGrades;
-        grades.details[dimensionName].average = averageScore;
-        grades.details[dimensionName].count = dimensionTasks.length;
+      // Agrupar por dimensión para este mes
+      const monthlyByDimension = {
+        saber: monthlyTasks.filter(t => t.dimension_id === 2),
+        hacer: monthlyTasks.filter(t => t.dimension_id === 3)
+      };
 
-        // Aplicar porcentajes según la distribución
-        switch (dimensionName) {
-          case "saber":
-            grades.saber = (averageScore * 45) / 100;
-            break;
-          case "hacer":
-            grades.hacer = (averageScore * 40) / 100;
-            break;
-          case "ser":
-            grades.ser = (averageScore * 5) / 100;
-            break;
-          case "decidir":
-            grades.decidir = (averageScore * 5) / 100;
-            break;
+      // Procesar cada dimensión para este mes
+      for (const [dimensionName, tasks] of Object.entries(monthlyByDimension)) {
+        if (tasks.length > 0) {
+          let monthTotalWeight = 0;
+          let monthWeightedScore = 0;
+
+          tasks.forEach(task => {
+            const assignment = task.assignments[0];
+            if (assignment && assignment.qualification) {
+              const taskScore = parseFloat(assignment.qualification);
+              const taskWeight = task.weight || 0;
+              
+              monthTotalWeight += taskWeight;
+              monthWeightedScore += (taskScore * taskWeight) / 100;
+
+              grades.details[dimensionName].tasks.push({
+                taskName: task.name,
+                score: taskScore,
+                weight: taskWeight,
+                month: monthRange.start.getMonth() + 1
+              });
+            }
+          });
+
+          // Si hay tareas en este mes, calcular el puntaje del mes
+          if (monthTotalWeight > 0) {
+            // El puntaje del mes es el promedio ponderado de las tareas del mes
+            const monthPercentage = (monthWeightedScore / monthTotalWeight) * 100;
+            const dimensionMaxScore = dimensionName === 'saber' ? 40 : 45;
+            const monthPoints = (monthPercentage * dimensionMaxScore) / 100;
+            
+            grades.details[dimensionName].totalScore += monthPoints;
+            grades.details[dimensionName].totalWeight += 1; // Cada mes cuenta como 1
+          }
         }
       }
     }
 
-    // Calcular autoevaluación
-    if (autoevaluaciones.length > 0) {
-      const taskGrades = [];
-      const totalAutoeval = autoevaluaciones.reduce((sum, task) => {
-        const assignment = task.assignments[0];
-        if (assignment && assignment.qualification) {
-          const score = parseFloat(assignment.qualification);
-          taskGrades.push({
-            taskName: task.name,
-            score: score,
-          });
-          return sum + score;
-        }
-        return sum;
-      }, 0);
+    // Calcular puntajes finales
+    // Para SER, DECIDIR, AUTOEVALUACIÓN (por trimestre)
+    ['ser', 'decidir', 'autoevaluacion'].forEach(dimensionName => {
+      const detail = grades.details[dimensionName];
+      if (detail.totalWeight > 0) {
+        const dimensionId = dimensionName === 'ser' ? 1 : (dimensionName === 'decidir' ? 4 : 5);
+        const maxScore = dimensionScores[dimensionId];
+        // Calcular porcentaje obtenido basado en peso total
+        const percentage = (detail.totalScore / detail.totalWeight) * 100;
+        detail.finalScore = (percentage * maxScore) / 100;
+        grades[dimensionName] = detail.finalScore;
+      }
+    });
 
-      const averageAutoeval = totalAutoeval / autoevaluaciones.length;
-      grades.details.autoevaluacion.tasks = taskGrades;
-      grades.details.autoevaluacion.average = averageAutoeval;
-      grades.details.autoevaluacion.count = autoevaluaciones.length;
-      grades.autoevaluacion = (averageAutoeval * 5) / 100;
-    }
+    // Para SABER y HACER (promedio de meses)
+    ['saber', 'hacer'].forEach(dimensionName => {
+      const detail = grades.details[dimensionName];
+      if (detail.totalWeight > 0) {
+        const dimensionId = dimensionName === 'saber' ? 2 : 3;
+        const maxScore = dimensionScores[dimensionId];
+        // Promedio de los meses
+        detail.finalScore = detail.totalScore / detail.totalWeight;
+        grades[dimensionName] = detail.finalScore;
+      }
+    });
 
     // Calcular total
     grades.total =
@@ -1230,7 +1347,26 @@ export class ReportsService {
       grades.autoevaluacion;
 
     console.log(`Trimestre ${quarter} calculado:`, grades);
+    
+    // Validación: El total debe estar entre 0 y 100
+    if (grades.total < 0 || grades.total > 100) {
+      console.warn(`⚠️ Total fuera de rango para estudiante ${studentId}: ${grades.total}`);
+    }
+    
     return grades;
+  }
+
+  /**
+   * Método helper para obtener los puntajes máximos por dimensión
+   */
+  private getDimensionScores() {
+    return {
+      1: 5,   // SER
+      2: 40,  // SABER
+      3: 45,  // HACER
+      4: 5,   // DECIDIR
+      5: 5    // AUTOEVALUACIÓN
+    };
   }
 
   private async setupCentralizadorExcel(
