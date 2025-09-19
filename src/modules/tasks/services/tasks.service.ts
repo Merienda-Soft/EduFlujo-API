@@ -541,21 +541,33 @@ export class TasksService {
 
                     if (assignment.qualification !== null && assignment.qualification !== undefined) {
                         const qualification = parseFloat(assignment.qualification.toString().trim());
+                        const taskWeight = task.weight || 0;
                         if (!isNaN(qualification)) {
                             result[quarter].ser_decidir[studentId].dimensions[dimensionId].tasks.push({
                                 taskId: task.id,
                                 taskName: task.name,
                                 qualification: qualification,
-                                weight: 5
+                                weight: taskWeight
                             });
 
-                            // Recalcular promedio con el peso correspondiente (5%)
+                            // Recalcular promedio ponderado usando el peso de cada tarea
                             const tasks = result[quarter].ser_decidir[studentId].dimensions[dimensionId].tasks;
                             if (tasks.length > 0) {
-                                const sum = tasks.reduce((acc, t) => acc + t.qualification, 0);
-                                const rawAverage = sum / tasks.length;
-                                // El promedio ya está sobre 100, multiplicamos por el peso (5%)
-                                result[quarter].ser_decidir[studentId].dimensions[dimensionId].average = Number((rawAverage * 0.05).toFixed(2));
+                                let totalWeight = 0;
+                                let weightedScore = 0;
+
+                                tasks.forEach(t => {
+                                    const weight = t.weight || 0;
+                                    totalWeight += weight;
+                                    weightedScore += (t.qualification * weight) / 100;
+                                });
+
+                                if (totalWeight > 0) {
+                                    // Calcular porcentaje promedio ponderado
+                                    const percentage = (weightedScore / totalWeight) * 100;
+                                    // Convertir a puntaje de la dimensión (5 puntos para SER, DECIDIR y AUTOEVALUACIÓN)
+                                    result[quarter].ser_decidir[studentId].dimensions[dimensionId].average = Number(((percentage * 5) / 100).toFixed(2));
+                                }
                             }
                         }
                     }
@@ -587,22 +599,34 @@ export class TasksService {
                     // Agregar la calificación a la dimensión correspondiente
                     if (assignment.qualification !== null && assignment.qualification !== undefined) {
                         const qualification = parseFloat(assignment.qualification.toString().trim());
+                        const taskWeight = task.weight || 0;
                         if (!isNaN(qualification)) {
                             const dimension = result[quarter].students[studentId].subjects[subjectId].months[month].dimensions[dimensionId];
                             dimension.tasks.push({
                                 taskId: task.id,
                                 taskName: task.name,
                                 qualification: qualification,
-                                weight: dimension.weight
+                                weight: taskWeight
                             });
 
-                            // Recalcular promedio con el peso correspondiente
+                            // Recalcular promedio ponderado usando el peso de cada tarea
                             if (dimension.tasks.length > 0) {
-                                const sum = dimension.tasks.reduce((acc, t) => acc + t.qualification, 0);
-                                const rawAverage = sum / dimension.tasks.length;
-                                // El promedio ya está sobre 100, multiplicamos por el peso (45% para SABER, 40% para HACER)
-                                const weightMultiplier = dimensionId === 2 ? 0.45 : 0.40; // SABER = 45%, HACER = 40%
-                                dimension.average = Number((rawAverage * weightMultiplier).toFixed(2));
+                                let totalWeight = 0;
+                                let weightedScore = 0;
+
+                                dimension.tasks.forEach(t => {
+                                    const weight = t.weight || 0;
+                                    totalWeight += weight;
+                                    weightedScore += (t.qualification * weight) / 100;
+                                });
+
+                                if (totalWeight > 0) {
+                                    // Calcular porcentaje promedio ponderado
+                                    const percentage = (weightedScore / totalWeight) * 100;
+                                    // Convertir a puntaje de la dimensión (45 para SABER, 40 para HACER)
+                                    const maxScore = dimensionId === 2 ? 45 : 40;
+                                    dimension.average = Number(((percentage * maxScore) / 100).toFixed(2));
+                                }
                             }
                         }
                     }
