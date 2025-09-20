@@ -635,7 +635,7 @@ export class TasksService {
         });
 
         // Generate Excel files and return URLs
-        const reportUrls = await this.generateQuarterlyExcelFiles(courseId, professorId, result);
+        const reportUrls = await this.generateQuarterlyExcelFiles(courseId, professorId, result, managementId);
 
         return {
             data: result,
@@ -775,7 +775,7 @@ export class TasksService {
         return 1 - distance / maxLength;
     }
 
-    async generateQuarterlyExcelFiles(courseId: number, professorId: number, processedData: any) {
+    async generateQuarterlyExcelFiles(courseId: number, professorId: number, processedData: any, managementId?: number) {
         try {
             console.log('Iniciando generación de archivos Excel...');
             const course = await this.db.course.findUnique({ where: { id: courseId } });
@@ -807,7 +807,14 @@ export class TasksService {
             }));
             console.log('Workbooks cargados exitosamente');
 
-            // Obtener los estudiantes del curso con su información personal
+            // Obtener datos del profesor y management para la hoja NOMINA
+            const professor = await this.db.professor.findUnique({
+                where: { id: professorId },
+                include: {
+                    person: true
+                }
+            });
+
             const registrations = await this.db.registration.findMany({
                 where: { course_id: courseId },
                 include: {
@@ -825,6 +832,39 @@ export class TasksService {
                     }
                 }
             });
+
+            const management = await this.db.management.findUnique({
+                where: { id: managementId || registrations[0]?.management_id }
+            });
+
+            // Poblar la hoja NOMINA en cada archivo trimestral
+            for (const quarterFile of quarterFiles) {
+                const nominaSheet = quarterFile.workbook.getWorksheet('NOMINA');
+                if (nominaSheet) {
+                    // C1: Nombre completo del profesor
+                    if (professor && professor.person) {
+                        const professorFullName = [
+                            professor.person.name,
+                            professor.person.lastname,
+                            professor.person.second_lastname
+                        ].filter(Boolean).join(' ');
+                        nominaSheet.getCell('C1').value = `PROFESOR(A): ${professorFullName}`;
+                    }
+
+                    // C2: Nombre del curso
+                    if (course) {
+                        nominaSheet.getCell('C2').value = `CURSO: ${course.course} PRIMARIA`;
+                    }
+
+                    // C4: Año del management
+                    if (management) {
+                        nominaSheet.getCell('C4').value = `GESTIÓN: ${management.management}`;
+                    }
+                }
+            }
+
+            // Obtener los estudiantes del curso con su información personal (ya definido arriba, removemos la duplicación)
+            // const registrations = await this.db.registration.findMany...
 
             // Mapear los quarters a sus claves correspondientes
             const quarterMap = {
@@ -974,13 +1014,39 @@ export class TasksService {
             console.log('Guardando archivos en Firebase...');
             // Save all files to Firebase and return URLs directly
             const reportUrls = await Promise.all(quarterFiles.map(async qf => {
-                const buffer = await qf.workbook.xlsx.writeBuffer();
-                const url = await this.uploadReportToFirebase(new Uint8Array(buffer), qf.fileName);
-                return {
-                    quarter: qf.quarter,
-                    fileName: qf.fileName,
-                    url: url
-                };
+                try {
+                    // Remove all conditional formatting to prevent ExcelJS errors
+                    // This preserves all other formatting (fonts, colors, borders, etc.)
+                    qf.workbook.worksheets.forEach(worksheet => {
+                        try {
+                            const wsInternal = worksheet as any;
+                            // Clear all conditional formatting properties that could cause issues
+                            if (wsInternal._conditionalFormattings) {
+                                wsInternal._conditionalFormattings = [];
+                            }
+                            if (wsInternal.conditionalFormattings) {
+                                wsInternal.conditionalFormattings = [];
+                            }
+                            // Clear any other conditional formatting references
+                            if (wsInternal._cfRuleManager) {
+                                wsInternal._cfRuleManager = null;
+                            }
+                        } catch (cfError) {
+                            console.warn(`Error limpiando formateo condicional en hoja ${worksheet.name}:`, cfError.message);
+                        }
+                    });
+
+                    const buffer = await qf.workbook.xlsx.writeBuffer();
+                    const url = await this.uploadReportToFirebase(new Uint8Array(buffer), qf.fileName);
+                    return {
+                        quarter: qf.quarter,
+                        fileName: qf.fileName,
+                        url: url
+                    };
+                } catch (bufferError) {
+                    console.error(`Error al procesar archivo ${qf.fileName}:`, bufferError);
+                    throw bufferError;
+                }
             }));
             console.log('Archivos guardados exitosamente');
 

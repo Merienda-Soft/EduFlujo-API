@@ -153,7 +153,8 @@ export class TasksController {
                     const reportUrls = await this.service.generateQuarterlyExcelFiles(
                         Number(courseId),
                         Number(professorId),
-                        result
+                        result,
+                        Number(managementId)
                     );
 
                     // Si se especifica un trimestre específico
