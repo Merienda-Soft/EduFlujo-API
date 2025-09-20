@@ -13,8 +13,6 @@ export class MarksService {
    */
   async calculateAndSaveFinalMarks(courseId: number, managementId: number, userId?: number) {
     try {
-      console.log(`🎓 Calculando notas finales para curso ${courseId}, gestión ${managementId}`);
-
       // 1. Obtener estudiantes del curso
       const students = await this.db.registration.findMany({
         where: {
@@ -61,8 +59,6 @@ export class MarksService {
       // 3. Calcular nota final para cada estudiante
       for (const studentRegistration of students) {
         const studentId = studentRegistration.student.id;
-        console.log(`📝 Calculando para estudiante: ${studentRegistration.student.person.name} ${studentRegistration.student.person.lastname}`);
-
         let totalSubjectGrades = 0;
         let subjectCount = 0;
 
@@ -126,8 +122,6 @@ export class MarksService {
           approvalStatus: approvalStatus,
           status: finalGrade >= 51 ? 'APROBADO' : 'REPROBADO'
         });
-
-        console.log(`✅ Nota final para ${studentRegistration.student.person.name}: ${finalGrade}`);
       }
 
       return {
@@ -147,8 +141,6 @@ export class MarksService {
    */
   async calculateAndSaveSubjectMarks(courseId: number, subjectId: number, managementId: number, userId?: number) {
     try {
-      console.log(`📚 Calculando notas por materia - Curso: ${courseId}, Materia: ${subjectId}, Gestión: ${managementId}`);
-
       // 1. Obtener estudiantes del curso
       const students = await this.db.registration.findMany({
         where: {
@@ -191,8 +183,6 @@ export class MarksService {
       // 3. Calcular nota final por materia para cada estudiante
       for (const studentRegistration of students) {
         const studentId = studentRegistration.student.id;
-        console.log(`📖 Calculando materia ${assignment.subject!.subject} para: ${studentRegistration.student.person.name} ${studentRegistration.student.person.lastname}`);
-
         const subjectFinalGrade = await this.calculateSubjectFinalGrade(
           studentId,
           subjectId,
@@ -247,8 +237,6 @@ export class MarksService {
           approvalStatus: approvalStatus,
           status: finalGrade >= 51 ? 'APROBADO' : 'REPROBADO'
         });
-
-        console.log(`✅ Nota final en ${assignment.subject!.subject} para ${studentRegistration.student.person.name}: ${finalGrade}`);
       }
 
       return {
@@ -323,11 +311,6 @@ export class MarksService {
     quarter: string,
     dimensions: any[]
   ) {
-    console.log(
-      `Calculando trimestre ${quarter} para estudiante ${studentId}, materia ${subjectId}`
-    );
-
-    // Configuración de puntajes por dimensión
     const dimensionScores = {
       1: 5,   // SER
       2: 45,  // SABER
@@ -639,6 +622,92 @@ export class MarksService {
 
     } catch (error) {
       console.error('Error obteniendo notas por materia:', error);
+      throw error;
+    }
+  }
+  
+  // Verify if courses have marks for all their subjects in a management
+  async checkCoursesHaveMarks(managementId: number) {
+    try {
+      // get courses
+      const courses = await this.db.course.findMany({
+        where: {
+          management_id: managementId,
+          status: 1
+        },
+        select: {
+          id: true,
+          course: true
+        }
+      });
+
+      if (courses.length === 0) {
+        return {
+          success: true,
+          data: [],
+          is_checked: true
+        };
+      }
+
+      // get subjects
+      const subjects = await this.db.subject.findMany({
+        where: {
+          status: 1
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (subjects.length === 0) {
+        return {
+          success: true,
+          data: [],
+          is_checked: true
+        };
+      }
+
+      const results = [];
+      let allCoursesHaveMarks = true;
+
+      for (const course of courses) {
+        let courseHasAllMarks = true;
+         
+        // check if all subjects have marks
+        for (const subject of subjects) {
+          const hasMarksForSubject = await this.db.markSubject.findFirst({
+            where: {
+              course_id: course.id,
+              subject_id: subject.id,
+              management_id: managementId,
+              status: 1
+            }
+          });
+
+          if (!hasMarksForSubject) {
+            courseHasAllMarks = false;
+            break;
+          }
+        }
+
+        results.push({
+          course_name: course.course || 'Sin nombre',
+          has_marks: courseHasAllMarks
+        });
+
+        if (!courseHasAllMarks) {
+          allCoursesHaveMarks = false;
+        }
+      }
+
+      return {
+        success: true,
+        data: results,
+        is_checked: allCoursesHaveMarks
+      };
+
+    } catch (error) {
+      console.error('Error verificando registros de cursos:', error);
       throw error;
     }
   }

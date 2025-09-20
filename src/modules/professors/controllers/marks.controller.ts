@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { MarksService } from '../services/marks.service';
+import { CheckCoursesMarksDto } from '../dtos/marks.dto';
 
 export class MarksController {
   private marksService: MarksService;
@@ -205,6 +206,47 @@ export class MarksController {
       res.status(500).json({
         success: false,
         message: 'Error interno del servidor al obtener notas por materia',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+
+  //Verificar si los cursos tienen registros en MarkSubject para todas sus materias
+  async checkCoursesHaveMarks(req: Request, res: Response) {
+    try {
+      const { managementId } = req.body;
+
+      // Validaciones
+      if (!managementId) {
+        return res.status(400).json({
+          success: false,
+          message: 'managementId es requerido'
+        });
+      }
+
+      if (typeof managementId !== 'number') {
+        return res.status(400).json({
+          success: false,
+          message: 'managementId debe ser un número'
+        });
+      }
+
+      console.log(`🔍 Verificando registros de cursos - Gestión: ${managementId}`);
+
+      const result = await this.marksService.checkCoursesHaveMarks(managementId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Verificación completada exitosamente',
+        data: result.data,
+        is_checked: result.is_checked
+      });
+
+    } catch (error) {
+      console.error('❌ Error en checkCoursesHaveMarks:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor al verificar registros de cursos',
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
