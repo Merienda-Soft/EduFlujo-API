@@ -6,11 +6,7 @@ export class ManagementService {
   }
 
   async getActiveManagements() {
-    return await Database.getInstance().management.findMany({
-      where: {
-        status: 1,
-      },
-    });
+    return await Database.getInstance().management.findMany();
   }
 
   async getUserByEmail(email: string) {
