@@ -1332,7 +1332,7 @@ export class ReportsService {
         // Calcular porcentaje obtenido basado en peso total
         const percentage = (detail.totalScore / detail.totalWeight) * 100;
         detail.finalScore = (percentage * maxScore) / 100;
-        grades[dimensionName] = detail.finalScore;
+        grades[dimensionName] = Math.round(detail.finalScore);
       }
     });
 
@@ -1344,7 +1344,7 @@ export class ReportsService {
         const maxScore = dimensionScores[dimensionId];
         // Promedio de los meses
         detail.finalScore = detail.totalScore / detail.totalWeight;
-        grades[dimensionName] = detail.finalScore;
+        grades[dimensionName] = Math.round(detail.finalScore);
       }
     });
 
