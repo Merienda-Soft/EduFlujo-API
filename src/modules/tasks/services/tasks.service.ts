@@ -144,7 +144,9 @@ export class TasksService {
             const evaluation_tool = await tx.evaluationTools.create({
                 data: {
                     type: data.tool.type,
-                    methodology: data.tool.methodology,
+                    methodology: typeof data.tool.methodology === 'string' 
+                        ? data.tool.methodology 
+                        : JSON.stringify(data.tool.methodology),
                     task_id: task.id,
                     status: 1,
                     created_by: created_by || null,
@@ -176,7 +178,9 @@ export class TasksService {
                         student_id: student.id,
                         status: 0,
                         created_by: created_by || null,
-                        evaluation_methodology: structuredClone(evaluation_tool.methodology), //evaluation methodology & tool schema
+                        evaluation_methodology: typeof evaluation_tool.methodology === 'string' 
+                            ? evaluation_tool.methodology 
+                            : JSON.stringify(evaluation_tool.methodology), //evaluation methodology & tool schema
                         type: evaluation_tool.type
                     }
                 })
@@ -286,7 +290,9 @@ export class TasksService {
                     where: { task_id: id },
                     data: {
                         type: Number(toolData.type),
-                        methodology: toolData.methodology,
+                        methodology: typeof toolData.methodology === 'string' 
+                            ? toolData.methodology 
+                            : JSON.stringify(toolData.methodology),
                         updated_at: new Date(),
                         updated_by: updatedByParam || null
                     }
@@ -297,7 +303,23 @@ export class TasksService {
                 await tx.taskAssignment.updateMany({
                     where: { task_id: id },
                     data: {
-                        evaluation_methodology: toolData.methodology,
+                        evaluation_methodology: typeof toolData.methodology === 'string' 
+                            ? toolData.methodology 
+                            : JSON.stringify(toolData.methodology),
+                        updated_at: new Date(),
+                        updated_by: updatedByParam || null
+                    }
+                });
+            } else if (taskData.evaluation_methodology) {
+                // Manejar actualización desde móvil (evaluation_methodology en taskData)
+                console.log('Actualizando metodología en asignaciones desde taskData...');
+                await tx.taskAssignment.updateMany({
+                    where: { task_id: id },
+                    data: {
+                        evaluation_methodology: typeof taskData.evaluation_methodology === 'string' 
+                            ? taskData.evaluation_methodology 
+                            : JSON.stringify(taskData.evaluation_methodology),
+                        type: taskData.evaluation_tool_type || null,
                         updated_at: new Date(),
                         updated_by: updatedByParam || null
                     }
@@ -335,7 +357,9 @@ export class TasksService {
                         qualification: student.qualification,
                         comment: student.comment,
                         status: 2,
-                        evaluation_methodology: student.evaluation_methodology //update after task review
+                        evaluation_methodology: typeof student.evaluation_methodology === 'string' 
+                            ? student.evaluation_methodology 
+                            : JSON.stringify(student.evaluation_methodology) //update after task review
                     }
                 })
             );

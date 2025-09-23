@@ -28,6 +28,16 @@ export class ReportsService {
     this.storage = getStorage(app);
   }
 
+  private numberToColumn(num: number): string {
+    let column = '';
+    while (num > 0) {
+      num--;
+      column = String.fromCharCode(65 + (num % 26)) + column;
+      num = Math.floor(num / 26);
+    }
+    return column;
+  }
+
   async generateAttendanceReport(
     courseId: number,
     subjectId: number,
@@ -1381,7 +1391,7 @@ export class ReportsService {
     const totalColumns = 2 + assignments.length * 4 + 2; // N°, NOMBRE, (4 cols x materia), PROMEDIO, SITUACION
 
     // Configurar título
-    worksheet.mergeCells(`A1:${String.fromCharCode(64 + totalColumns)}1`);
+    worksheet.mergeCells(`A1:${this.numberToColumn(totalColumns)}1`);
     const titleCell = worksheet.getCell("A1");
     titleCell.value = `CENTRALIZADOR ANUAL - ${course.course} - GESTIÓN ${management.management}`;
     titleCell.font = { bold: true, size: 16 };
@@ -1414,8 +1424,8 @@ export class ReportsService {
     let currentCol = 3;
     assignments.forEach((assignment) => {
       // Fila 2: Nombre de la materia (abarca 4 columnas)
-      const startCol = String.fromCharCode(64 + currentCol);
-      const endCol = String.fromCharCode(64 + currentCol + 3);
+      const startCol = this.numberToColumn(currentCol);
+      const endCol = this.numberToColumn(currentCol + 3);
       worksheet.mergeCells(`${startCol}2:${endCol}2`);
 
       const subjectCell = worksheet.getCell(`${startCol}2`);
@@ -1431,7 +1441,7 @@ export class ReportsService {
       // Fila 3: Subencabezados (1T, 2T, 3T, PR)
       const subHeaders = ["1T", "2T", "3T", "PR"];
       subHeaders.forEach((header, subIndex) => {
-        const col = String.fromCharCode(64 + currentCol + subIndex);
+        const col = this.numberToColumn(currentCol + subIndex);
         const cell = worksheet.getCell(`${col}3`);
         cell.value = header;
         cell.font = { bold: true };
@@ -1447,8 +1457,8 @@ export class ReportsService {
     });
 
     // PROMEDIO FINAL y SITUACIÓN (abarcan 2 filas)
-    const promedioCol = String.fromCharCode(64 + currentCol);
-    const situacionCol = String.fromCharCode(64 + currentCol + 1);
+    const promedioCol = this.numberToColumn(currentCol);
+    const situacionCol = this.numberToColumn(currentCol + 1);
 
     worksheet.mergeCells(`${promedioCol}2:${promedioCol}3`);
     const promedioCell = worksheet.getCell(`${promedioCol}2`);
@@ -2544,7 +2554,7 @@ export class ReportsService {
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     const fecha = new Date().toLocaleDateString("es-ES");
-    doc.text(`Generado el: ${fecha}`, 20, finalY + 20);
+    doc.text(`Generado el: ${fecha}`, 20, finalY);
   }
 
   private async uploadBoletinToFirebase(
