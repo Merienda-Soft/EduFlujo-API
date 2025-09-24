@@ -679,7 +679,7 @@ export class TasksService {
 
     // Subject name mapping configuration
     private subjectMapping = {
-        'LENGUAJE': 'LENG',
+        'COMUNICACIÓN Y LENGUAJES': 'LENG',
         'CIENCIAS SOCIALES': 'CIEN SOC',
         'EDUCACIÓN FÍSICA Y DEPORTES': 'ED FISICA',
         'EDUCACIÓN MUSICAL': 'ED MUSICA',
@@ -687,7 +687,7 @@ export class TasksService {
         'MATEMÁTICAS': 'MATE',
         'TÉCNICA TECNOLÓGICA': 'TECN TECN',
         'CIENCIAS NATURALES': 'CIEN NAT',
-        'VALORES, ESPIRITUALIDAD Y RELIGIONES': 'RELIGION'
+        'VALORES ESPIRITUALIDADES Y RELIGIONES': 'RELIGION'
     };
 
     // Column configuration for each subject worksheet
