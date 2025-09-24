@@ -1394,30 +1394,41 @@ export class ReportsService {
     worksheet.mergeCells(`A1:${this.numberToColumn(totalColumns)}1`);
     const titleCell = worksheet.getCell("A1");
     titleCell.value = `CENTRALIZADOR ANUAL - ${course.course} - GESTIÓN ${management.management}`;
-    titleCell.font = { bold: true, size: 16 };
+    titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
     titleCell.alignment = { horizontal: "center" };
+    titleCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF4472C4" }, // Steel blue
+    };
+    titleCell.border = {
+      top: { style: "thick" },
+      left: { style: "thick" },
+      bottom: { style: "thick" },
+      right: { style: "thick" },
+    };
 
     // Fila 2: N° y APELLIDOS Y NOMBRES (que abarcan 2 filas)
     worksheet.mergeCells("A2:A3");
     const numCell = worksheet.getCell("A2");
     numCell.value = "N°";
-    numCell.font = { bold: true };
+    numCell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     numCell.alignment = { horizontal: "center", vertical: "middle" };
     numCell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FFE0E0E0" },
+      fgColor: { argb: "FF4682B4" }, // Steel blue
     };
 
     worksheet.mergeCells("B2:B3");
     const nameCell = worksheet.getCell("B2");
     nameCell.value = "APELLIDOS Y NOMBRES";
-    nameCell.font = { bold: true };
+    nameCell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     nameCell.alignment = { horizontal: "center", vertical: "middle" };
     nameCell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FFE0E0E0" },
+      fgColor: { argb: "FF4682B4" }, // Steel blue
     };
 
     // Configurar encabezados de materias
@@ -1430,12 +1441,12 @@ export class ReportsService {
 
       const subjectCell = worksheet.getCell(`${startCol}2`);
       subjectCell.value = assignment.subject.subject;
-      subjectCell.font = { bold: true };
+      subjectCell.font = { bold: true, color: { argb: "FFFFFFFF" } };
       subjectCell.alignment = { horizontal: "center" };
       subjectCell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
+        fgColor: { argb: "FF5F9EA0" }, // Cadet blue
       };
 
       // Fila 3: Subencabezados (1T, 2T, 3T, PR)
@@ -1444,12 +1455,12 @@ export class ReportsService {
         const col = this.numberToColumn(currentCol + subIndex);
         const cell = worksheet.getCell(`${col}3`);
         cell.value = header;
-        cell.font = { bold: true };
+        cell.font = { bold: true, color: { argb: "FF000000" } };
         cell.alignment = { horizontal: "center" };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FFE0E0E0" },
+          fgColor: { argb: "FFB0E0E6" }, // Powder blue
         };
       });
 
@@ -1463,23 +1474,23 @@ export class ReportsService {
     worksheet.mergeCells(`${promedioCol}2:${promedioCol}3`);
     const promedioCell = worksheet.getCell(`${promedioCol}2`);
     promedioCell.value = "PROMEDIO FINAL";
-    promedioCell.font = { bold: true };
+    promedioCell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     promedioCell.alignment = { horizontal: "center", vertical: "middle" };
     promedioCell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FFE0E0E0" },
+      fgColor: { argb: "FF4682B4" }, // Steel blue
     };
 
     worksheet.mergeCells(`${situacionCol}2:${situacionCol}3`);
     const situacionCell = worksheet.getCell(`${situacionCol}2`);
     situacionCell.value = "SITUACIÓN";
-    situacionCell.font = { bold: true };
+    situacionCell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     situacionCell.alignment = { horizontal: "center", vertical: "middle" };
     situacionCell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FFE0E0E0" },
+      fgColor: { argb: "FF4682B4" }, // Steel blue
     };
 
     // Aplicar bordes a los encabezados
@@ -1487,10 +1498,10 @@ export class ReportsService {
       for (let col = 1; col <= totalColumns; col++) {
         const cell = worksheet.getCell(row, col);
         cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
+          top: { style: "medium" },
+          left: { style: "medium" },
+          bottom: { style: "medium" },
+          right: { style: "medium" },
         };
       }
     }
@@ -1501,27 +1512,46 @@ export class ReportsService {
       let colIndex = 1;
 
       // Número y nombre
-      row.getCell(colIndex++).value = index + 1;
-      row.getCell(
-        colIndex++
-      ).value = `${studentData.student.person.lastname} ${studentData.student.person.name}`;
+      const numCell = row.getCell(colIndex++);
+      numCell.value = index + 1;
+      numCell.font = { bold: true };
+
+      const nameCell = row.getCell(colIndex++);
+      nameCell.value = `${studentData.student.person.lastname} ${studentData.student.person.name}`;
+      nameCell.alignment = { horizontal: "left" };
 
       // Notas por materia
       studentData.subjects.forEach((subjectGrade: any) => {
-        row.getCell(colIndex++).value = Math.round(
-          subjectGrade.trimesters.Q1.total
-        );
-        row.getCell(colIndex++).value = Math.round(
-          subjectGrade.trimesters.Q2.total
-        );
-        row.getCell(colIndex++).value = Math.round(
-          subjectGrade.trimesters.Q3.total
-        );
-        row.getCell(colIndex++).value = Math.round(subjectGrade.finalAverage);
+        const q1Cell = row.getCell(colIndex++);
+        q1Cell.value = Math.round(subjectGrade.trimesters.Q1.total);
+        if (Math.round(subjectGrade.trimesters.Q1.total) < 51) {
+          q1Cell.font = { color: { argb: "FFFF0000" } }; // Rojo para reprobado
+        }
+
+        const q2Cell = row.getCell(colIndex++);
+        q2Cell.value = Math.round(subjectGrade.trimesters.Q2.total);
+        if (Math.round(subjectGrade.trimesters.Q2.total) < 51) {
+          q2Cell.font = { color: { argb: "FFFF0000" } };
+        }
+
+        const q3Cell = row.getCell(colIndex++);
+        q3Cell.value = Math.round(subjectGrade.trimesters.Q3.total);
+        if (Math.round(subjectGrade.trimesters.Q3.total) < 51) {
+          q3Cell.font = { color: { argb: "FFFF0000" } };
+        }
+
+        const prCell = row.getCell(colIndex++);
+        prCell.value = Math.round(subjectGrade.finalAverage);
+        if (Math.round(subjectGrade.finalAverage) < 51) {
+          prCell.font = { color: { argb: "FFFF0000" } };
+        }
       });
 
       // Promedio final y situación
-      row.getCell(colIndex++).value = Math.round(studentData.finalAverage);
+      const promedioFinalCell = row.getCell(colIndex++);
+      promedioFinalCell.value = Math.round(studentData.finalAverage);
+      promedioFinalCell.font = { bold: true };
+
       const statusCell = row.getCell(colIndex++);
       statusCell.value = studentData.status;
       statusCell.font = {
@@ -1531,31 +1561,39 @@ export class ReportsService {
         },
       };
 
-      // Aplicar bordes a toda la fila
+      // Aplicar colores de fila alterna y bordes
+      const rowBgColor = index % 2 === 0 ? "FFFFFFFF" : "FFF8F8FF"; // Alice blue alterno
       for (let i = 1; i <= totalColumns; i++) {
         const cell = row.getCell(i);
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: rowBgColor },
+        };
         cell.border = {
           top: { style: "thin" },
           left: { style: "thin" },
           bottom: { style: "thin" },
           right: { style: "thin" },
         };
-        cell.alignment = { horizontal: "center" };
+        if (i > 2) { // Centrar desde la columna 3 en adelante
+          cell.alignment = { horizontal: "center" };
+        }
       }
     });
 
     // Ajustar ancho de columnas
-    worksheet.getColumn(1).width = 5; // N°
-    worksheet.getColumn(2).width = 25; // APELLIDOS Y NOMBRES
+    worksheet.getColumn(1).width = 6; // N°
+    worksheet.getColumn(2).width = 30; // APELLIDOS Y NOMBRES
 
     // Columnas de materias
     for (let i = 3; i <= 2 + assignments.length * 4; i++) {
-      worksheet.getColumn(i).width = 8;
+      worksheet.getColumn(i).width = 10;
     }
 
     // Columnas finales
-    worksheet.getColumn(totalColumns - 1).width = 15; // PROMEDIO FINAL
-    worksheet.getColumn(totalColumns).width = 12; // SITUACIÓN
+    worksheet.getColumn(totalColumns - 1).width = 18; // PROMEDIO FINAL
+    worksheet.getColumn(totalColumns).width = 15; // SITUACIÓN
   }
 
   private generateCentralizadorFileName(course: any, management: any): string {
@@ -1859,10 +1897,19 @@ export class ReportsService {
         course,
         management,
         trimester,
-        boletinesInCurrentPage // Pasamos la posición en la página
+        boletinesInCurrentPage, // Pasamos la posición en la página
+        i + 1 // Número del estudiante (1, 2, 3...)
       );
 
-      boletinesInCurrentPage++;
+      // Verificar si el boletín es muy largo y evitar sobreposición
+      const finalY = (doc as any).lastAutoTable.finalY;
+      if (boletinesInCurrentPage === 0 && finalY > 120) {
+        // Si el primer boletín es muy largo, agregar nueva página para el siguiente
+        doc.addPage();
+        boletinesInCurrentPage = 0; // Reset para que el siguiente sea el primero en la nueva página
+      } else {
+        boletinesInCurrentPage++;
+      }
     }
 
     // Convertir a buffer
@@ -1877,7 +1924,8 @@ export class ReportsService {
     course: any,
     management: any,
     trimester?: "Q1" | "Q2" | "Q3" | "ANUAL",
-    positionInPage: number = 0
+    positionInPage: number = 0,
+    studentNumber: number = 1
   ) {
     // Crear una tabla completa que incluya todo el boletín
     this.createCompleteBoletinTable(
@@ -1887,7 +1935,8 @@ export class ReportsService {
       course,
       management,
       trimester,
-      positionInPage
+      positionInPage,
+      studentNumber
     );
   }
 
@@ -1898,7 +1947,8 @@ export class ReportsService {
     course: any,
     management: any,
     trimester?: "Q1" | "Q2" | "Q3" | "ANUAL",
-    positionInPage: number = 0
+    positionInPage: number = 0,
+    studentNumber: number = 1
   ) {
     // Calcular posición Y inicial basada en la posición en la página
     const startY = positionInPage === 0 ? 25 : 150; // Primera posición: 25mm, segunda: 150mm
@@ -1935,19 +1985,21 @@ export class ReportsService {
         content: "BOLETÍN DE NOTAS",
         colSpan: 4,
         styles: {
-          fontSize: 12, // Reducido de 14 para mayor compacidad
+          fontSize: 14,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [255, 255, 255],
+          fillColor: [70, 130, 180], // Steel blue para un look más profesional
+          textColor: [255, 255, 255],
         },
       },
       {
         content: `GESTIÓN: ${management.management}`,
         styles: {
-          fontSize: 8, // Reducido de 9 para mayor compacidad
+          fontSize: 10,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [144, 238, 144],
+          fillColor: [100, 149, 237], // Cornflower blue
+          textColor: [255, 255, 255],
         },
       },
     ]);
@@ -1957,33 +2009,41 @@ export class ReportsService {
       {
         content: "APELLIDOS Y NOMBRE(S)",
         styles: {
-          fontSize: 8, // Reducido de 9 para mayor compacidad
+          fontSize: 9,
           fontStyle: "bold",
           halign: "left",
-          fillColor: [240, 240, 240],
+          fillColor: [176, 196, 222], // Light steel blue
+          textColor: [0, 0, 0],
         },
       },
       {
         content: `${student.person.lastname} ${student.person.name}`,
         colSpan: 2,
-        styles: { fontSize: 8, fontStyle: "bold", halign: "left" }, // Reducido para mayor compacidad
+        styles: { 
+          fontSize: 9, 
+          fontStyle: "bold", 
+          halign: "left",
+          fillColor: [255, 255, 255],
+        },
       },
       {
         content: `CURSO: 5° "${course.course}" PRIMARIA`,
         styles: {
-          fontSize: 8, // Reducido más para que quepa
+          fontSize: 9,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [144, 238, 144],
+          fillColor: [100, 149, 237], // Cornflower blue
+          textColor: [255, 255, 255],
         },
       },
       {
-        content: "1",
+        content: studentNumber.toString(),
         styles: {
-          fontSize: 14, // Reducido de 16
+          fontSize: 16,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [144, 238, 144],
+          fillColor: [100, 149, 237], // Cornflower blue
+          textColor: [255, 255, 255],
         },
       },
     ]);
@@ -1993,100 +2053,124 @@ export class ReportsService {
       {
         content: "ÁREAS CURRICULARES",
         styles: {
-          fontSize: 9, // Reducido de 10
+          fontSize: 10,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [200, 200, 200],
+          fillColor: [70, 130, 180], // Steel blue
+          textColor: [255, 255, 255],
         },
       },
       {
         content: "VALORACIÓN CUANTITATIVA",
         colSpan: 4,
         styles: {
-          fontSize: 9, // Reducido de 10
+          fontSize: 10,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [200, 200, 200],
+          fillColor: [70, 130, 180], // Steel blue
+          textColor: [255, 255, 255],
         },
       },
     ]);
 
     // Fila 4: Subencabezados de trimestres
     tableData.push([
-      { content: "", styles: { fillColor: [200, 200, 200] } },
+      { 
+        content: "", 
+        styles: { 
+          fillColor: [176, 196, 222], // Light steel blue
+        } 
+      },
       {
         content: "1° TRIM",
         styles: {
-          fontSize: 8, // Reducido de 9
+          fontSize: 9,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [200, 200, 200],
+          fillColor: [176, 196, 222], // Light steel blue
+          textColor: [0, 0, 0],
         },
       },
       {
         content: "2° TRIM",
         styles: {
-          fontSize: 8, // Reducido de 9
+          fontSize: 9,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [200, 200, 200],
+          fillColor: [176, 196, 222], // Light steel blue
+          textColor: [0, 0, 0],
         },
       },
       {
         content: "3° TRIM",
         styles: {
-          fontSize: 8, // Reducido de 9
+          fontSize: 9,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [200, 200, 200],
+          fillColor: [176, 196, 222], // Light steel blue
+          textColor: [0, 0, 0],
         },
       },
       {
-        content: "PROMEDIO ANUAL",
+        content: "PROMEDIO",
         styles: {
-          fontSize: 8, // Reducido de 9
+          fontSize: 9,
           fontStyle: "bold",
           halign: "center",
-          fillColor: [200, 200, 200],
+          fillColor: [176, 196, 222], // Light steel blue
+          textColor: [0, 0, 0],
         },
       },
     ]);
 
     // Agregar materias con colores para notas reprobadas
-    studentGrades.forEach((subjectGrade) => {
+    studentGrades.forEach((subjectGrade, index) => {
       const q1Grade = Math.round(subjectGrade.trimesters.Q1.total);
       const q2Grade = Math.round(subjectGrade.trimesters.Q2.total);
       const q3Grade = Math.round(subjectGrade.trimesters.Q3.total);
       const finalGrade = Math.round(subjectGrade.finalAverage);
 
+      const rowBgColor = index % 2 === 0 ? [255, 255, 255] : [248, 248, 255]; // Alice blue alterno
+
       tableData.push([
-        subjectGrade.assignment.subject.subject.toUpperCase(),
+        {
+          content: subjectGrade.assignment.subject.subject.toUpperCase(),
+          styles: {
+            halign: "left",
+            fillColor: rowBgColor,
+            textColor: [0, 0, 0],
+          },
+        },
         {
           content: q1Grade.toString(),
           styles: {
             halign: "center",
-            textColor: q1Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+            fillColor: q1Grade < 51 ? [255, 235, 235] : rowBgColor, // Light pink for failed
+            textColor: q1Grade < 51 ? [255, 0, 0] : [0, 0, 0],
           },
         },
         {
           content: q2Grade.toString(),
           styles: {
             halign: "center",
-            textColor: q2Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+            fillColor: q2Grade < 51 ? [255, 235, 235] : rowBgColor, // Light pink for failed
+            textColor: q2Grade < 51 ? [255, 0, 0] : [0, 0, 0],
           },
         },
         {
           content: q3Grade.toString(),
           styles: {
             halign: "center",
-            textColor: q3Grade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+            fillColor: q3Grade < 51 ? [255, 235, 235] : rowBgColor, // Light pink for failed
+            textColor: q3Grade < 51 ? [255, 0, 0] : [0, 0, 0],
           },
         },
         {
           content: finalGrade.toString(),
           styles: {
             halign: "center",
-            textColor: finalGrade < 51 ? [255, 0, 0] : [0, 0, 0], // Rojo si reprobó
+            fillColor: finalGrade < 51 ? [255, 235, 235] : rowBgColor, // Light pink for failed
+            textColor: finalGrade < 51 ? [255, 0, 0] : [0, 0, 0],
           },
         },
       ]);
@@ -2096,14 +2180,19 @@ export class ReportsService {
     tableData.push([
       {
         content: "PROMEDIO TRIMESTRAL:",
-        styles: { fontStyle: "bold", fillColor: [245, 245, 245] },
+        styles: { 
+          fontStyle: "bold", 
+          fillColor: [135, 206, 235], // Sky blue
+          textColor: [0, 0, 0],
+        },
       },
       {
         content: Math.round(totalQ1).toString(),
         styles: {
           fontStyle: "bold",
           halign: "center",
-          fillColor: [245, 245, 245],
+          fillColor: [135, 206, 235], // Sky blue
+          textColor: [0, 0, 0],
         },
       },
       {
@@ -2111,7 +2200,8 @@ export class ReportsService {
         styles: {
           fontStyle: "bold",
           halign: "center",
-          fillColor: [245, 245, 245],
+          fillColor: [135, 206, 235], // Sky blue
+          textColor: [0, 0, 0],
         },
       },
       {
@@ -2119,7 +2209,8 @@ export class ReportsService {
         styles: {
           fontStyle: "bold",
           halign: "center",
-          fillColor: [245, 245, 245],
+          fillColor: [135, 206, 235], // Sky blue
+          textColor: [0, 0, 0],
         },
       },
       {
@@ -2127,29 +2218,56 @@ export class ReportsService {
         styles: {
           fontStyle: "bold",
           halign: "center",
-          fillColor: [245, 245, 245],
+          fillColor: [135, 206, 235], // Sky blue
+          textColor: [0, 0, 0],
         },
       },
     ]);
 
     // Fila de áreas reprobadas por trimestre
     tableData.push([
-      { content: "Total - Áreas Reprobadas", styles: { fontStyle: "bold" } },
+      { 
+        content: "Total - Áreas Reprobadas", 
+        styles: { 
+          fontStyle: "bold",
+          fillColor: [255, 228, 196], // Blanched almond para destacar
+          textColor: [0, 0, 0],
+        } 
+      },
       {
         content: areasReprobadasQ1.toString(),
-        styles: { fontStyle: "bold", halign: "center" },
+        styles: { 
+          fontStyle: "bold", 
+          halign: "center",
+          fillColor: [255, 228, 196], // Blanched almond
+          textColor: areasReprobadasQ1 > 0 ? [255, 0, 0] : [0, 0, 0],
+        },
       },
       {
         content: areasReprobadasQ2.toString(),
-        styles: { fontStyle: "bold", halign: "center" },
+        styles: { 
+          fontStyle: "bold", 
+          halign: "center",
+          fillColor: [255, 228, 196], // Blanched almond
+          textColor: areasReprobadasQ2 > 0 ? [255, 0, 0] : [0, 0, 0],
+        },
       },
       {
         content: areasReprobadasQ3.toString(),
-        styles: { fontStyle: "bold", halign: "center" },
+        styles: { 
+          fontStyle: "bold", 
+          halign: "center",
+          fillColor: [255, 228, 196], // Blanched almond
+          textColor: areasReprobadasQ3 > 0 ? [255, 0, 0] : [0, 0, 0],
+        },
       },
       {
         content: "-",
-        styles: { fontStyle: "bold", halign: "center" },
+        styles: { 
+          fontStyle: "bold", 
+          halign: "center",
+          fillColor: [255, 228, 196], // Blanched almond
+        },
       },
     ]);
 
@@ -2158,22 +2276,25 @@ export class ReportsService {
       body: tableData,
       startY: startY,
       styles: {
-        fontSize: 7, // Reducido de 8 para que sea más compacto
-        cellPadding: 1.5, // Reducido de 2 para menos espacio
+        fontSize: 8,
+        cellPadding: 3,
         lineColor: [0, 0, 0],
-        lineWidth: 0.5,
+        lineWidth: 0.7,
         halign: "center",
       },
       columnStyles: {
-        0: { cellWidth: 70, halign: "left" }, // Áreas curriculares más compacta
-        1: { cellWidth: 22 }, // 1° TRIM
-        2: { cellWidth: 22 }, // 2° TRIM
-        3: { cellWidth: 22 }, // 3° TRIM
-        4: { cellWidth: 28 }, // PROMEDIO ANUAL
+        0: { cellWidth: 60, halign: "left" },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 26 },
       },
-      margin: { left: 15, right: 15 }, // Márgenes más pequeños
+      margin: { left: 15, right: 15 },
       theme: "grid",
-      tableWidth: "wrap", // Ajuste automático
+      tableWidth: "wrap",
+      alternateRowStyles: {
+        fillColor: [248, 248, 255], // Alice blue para filas alternas
+      },
     });
   }
 
