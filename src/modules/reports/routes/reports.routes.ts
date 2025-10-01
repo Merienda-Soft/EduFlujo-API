@@ -47,5 +47,11 @@ export const reportsRouter = (() => {
     reportsController.generateBoletin.bind(reportsController)
   );
 
+  // Libro Pedagógico - Reporte mensual por profesor
+  router.get(
+    "/libro-pedagogico/course/:courseId/professor/:professorId/management/:managementId/month/:month",
+    reportsController.generateLibroPedagogico.bind(reportsController)
+  );
+
   return router;
 })();

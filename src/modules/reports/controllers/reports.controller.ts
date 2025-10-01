@@ -4,14 +4,17 @@ import {
   attendanceReportSchema,
   centralizadorAnualSchema,
   customDateReportSchema,
+  libroPedagogicoSchema,
   managementReportSchema,
   monthlyReportSchema,
   yearlyReportSchema,
 } from "../dtos/reports.dtos";
 import { ReportsService } from "../services/reports.service";
+import { LibroPedagogicoService } from "../services/libro-pedagogico.service";
 
 export class ReportsController {
   private service = new ReportsService();
+  private libroPedagogicoService = new LibroPedagogicoService();
 
   async generateAttendanceReport(req: Request, res: Response) {
     try {
@@ -360,6 +363,41 @@ export class ReportsController {
         ...result,
         reportType: studentId ? "boletin_individual" : "boletines_curso",
       });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          ok: false,
+          error: "Datos de entrada inválidos",
+          details: error.errors,
+        });
+      }
+      this.handleError(res, error);
+    }
+  }
+
+  // Libro Pedagógico - Reporte mensual por profesor
+  // Params: /libro-pedagogico/course/:courseId/professor/:professorId/management/:managementId/month/:month
+  async generateLibroPedagogico(req: Request, res: Response) {
+    try {
+      const { courseId, professorId, managementId, month } = req.params;
+
+      // Validar parámetros
+      const validatedData = libroPedagogicoSchema.parse({
+        courseId: Number(courseId),
+        professorId: Number(professorId),
+        managementId: Number(managementId),
+        month: Number(month),
+      });
+      console.log(validatedData)
+
+      const result = await this.libroPedagogicoService.generateLibroPedagogico(
+        validatedData.courseId,
+        validatedData.professorId,
+        validatedData.managementId,
+        validatedData.month
+      );
+
+      res.status(200).json(result);
     } catch (error) {
       if (error instanceof ZodError) {
         return res.status(400).json({
